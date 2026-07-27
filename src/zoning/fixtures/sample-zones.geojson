@@ -1,0 +1,53 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": { "zoneName": "住宅區" },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [120.64, 24.15],
+            [120.65, 24.15],
+            [120.65, 24.16],
+            [120.64, 24.16],
+            [120.64, 24.15]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": { "zoneName": "商業區" },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [120.65, 24.15],
+            [120.66, 24.15],
+            [120.66, 24.16],
+            [120.65, 24.16],
+            [120.65, 24.15]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": { "zoneName": "農業區" },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [120.7, 24.2],
+            [120.705, 24.2],
+            [120.705, 24.205],
+            [120.7, 24.205],
+            [120.7, 24.2]
+          ]
+        ]
+      }
+    }
+  ]
+}
