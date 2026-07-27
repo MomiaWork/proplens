@@ -44,9 +44,15 @@ export function startPropertyServer(service: PropertyQueryService, onListening: 
       return;
     }
 
-    const card = await service.query(address);
-    res.writeHead(200, { "Content-Type": "application/json" });
-    res.end(JSON.stringify(card));
+    try {
+      const card = await service.query(address);
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify(card));
+    } catch (err) {
+      console.error(err);
+      res.writeHead(500, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: err instanceof Error ? err.message : String(err) }));
+    }
   });
 
   server.listen(PORT, "0.0.0.0", () => {

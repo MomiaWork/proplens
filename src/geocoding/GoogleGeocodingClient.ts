@@ -1,51 +1,50 @@
 import type { Coordinate } from "../shared/Coordinate.ts";
 import type { GeocodingClient } from "./GeocodingClient.ts";
 
-const GEOCODING_ENDPOINT = "https://maps.googleapis.com/maps/api/geocode/json";
+const GEOCODING_ENDPOINT = "https://geocode.googleapis.com/v4/geocode/address";
 
-interface GoogleGeocodeResponse {
-  status: string;
-  results: Array<{
-    geometry: { location: { lat: number; lng: number } };
+interface GeocodeAddressResponse {
+  results?: Array<{
+    location: { latitude: number; longitude: number };
   }>;
 }
 
 /**
- * Real Google Maps Geocoding API client. Not exercised by the automated
+ * Real Google Geocoding API (v4) client. Not exercised by the automated
  * test suite (per the spec, only the geocoding API boundary is stubbed) —
  * needs GOOGLE_MAPS_API_KEY to run against the live API.
  *
- * Queries are constrained to 台中市 (`components=administrative_area:台中市|country:TW`)
- * so a same-named road in another county doesn't get geocoded by mistake.
+ * Uses the newer v4 REST API (geocode.googleapis.com), not the classic
+ * maps.googleapis.com/maps/api/geocode/json — the classic API requires a
+ * billed Cloud project even within its free tier, while v4 is covered by
+ * Google's no-credit-card Maps Demo Key
+ * (developers.google.com/maps/demo-key). v4 has no hard
+ * country/administrative-area filter equivalent to the classic API's
+ * `components` param (only `regionCode` as a soft bias) — this project's
+ * addresses always spell out 台中市/臺中市 in the query text itself, which
+ * does the disambiguation instead.
  */
 export class GoogleGeocodingClient implements GeocodingClient {
   constructor(private readonly apiKey: string) {}
 
   async geocode(address: string): Promise<Coordinate | null> {
-    const url = new URL(GEOCODING_ENDPOINT);
-    url.searchParams.set("address", address);
-    url.searchParams.set("components", "administrative_area:台中市|country:TW");
-    url.searchParams.set("region", "tw");
-    url.searchParams.set("key", this.apiKey);
+    const url = new URL(`${GEOCODING_ENDPOINT}/${encodeURIComponent(address)}`);
+    url.searchParams.set("regionCode", "TW");
 
-    const response = await fetch(url);
+    const response = await fetch(url, {
+      headers: { "X-Goog-Api-Key": this.apiKey },
+    });
+
     if (!response.ok) {
-      throw new Error(`Google Geocoding API request failed: ${response.status} ${response.statusText}`);
+      const body = await response.text();
+      throw new Error(`Google Geocoding API request failed: ${response.status} ${response.statusText} — ${body}`);
     }
 
-    const body = (await response.json()) as GoogleGeocodeResponse;
-
-    if (body.status === "ZERO_RESULTS") {
-      return null;
-    }
-    if (body.status !== "OK") {
-      throw new Error(`Google Geocoding API returned status ${body.status}`);
-    }
-
-    const location = body.results[0]?.geometry.location;
+    const body = (await response.json()) as GeocodeAddressResponse;
+    const location = body.results?.[0]?.location;
     if (!location) {
       return null;
     }
-    return { lat: location.lat, lon: location.lng };
+    return { lat: location.latitude, lon: location.longitude };
   }
 }
