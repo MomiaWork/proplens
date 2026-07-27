@@ -6,17 +6,25 @@
   "scripts": {
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
-    "dev:server": "tsx src/server.ts"
+    "dev:server": "tsx src/server.ts",
+    "dev:server:real": "tsx --env-file-if-exists=.env src/server.real.ts",
+    "convert:zoning": "tsx src/dev/convertZoningShpToGeoJson.ts"
   },
   "devDependencies": {
+    "@types/adm-zip": "^0.5.8",
     "@types/geojson": "^7946.0.16",
     "@types/node": "^22.10.2",
+    "@types/proj4": "^2.5.6",
+    "@types/shapefile": "^0.6.4",
     "tsx": "^4.23.1",
     "typescript": "^5.7.2",
     "vitest": "^4.1.10"
   },
   "dependencies": {
     "@turf/boolean-point-in-polygon": "^7.2.0",
-    "@turf/helpers": "^7.2.0"
+    "@turf/helpers": "^7.2.0",
+    "adm-zip": "^0.6.0",
+    "proj4": "^2.20.9",
+    "shapefile": "^0.6.6"
   }
 }
