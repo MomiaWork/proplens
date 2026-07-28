@@ -2,6 +2,7 @@ import { DatabaseSync } from "node:sqlite";
 import type { Coordinate } from "../shared/Coordinate.ts";
 import { haversineDistanceMeters } from "../shared/geo.ts";
 import type { ParsedAddress } from "./parseAddress.ts";
+import type { VillageNeighborhood } from "./VillageNeighborhoodCache.ts";
 
 export interface AddressPoint {
   street: string;
@@ -11,13 +12,6 @@ export interface AddressPoint {
   village: string;
   neighborhood: string;
   coordinate: Coordinate;
-}
-
-export interface VillageNeighborhoodMatch {
-  village: string;
-  neighborhood: string;
-  street: string;
-  houseNumber: string;
 }
 
 /**
@@ -53,12 +47,19 @@ export class AddressPointStore {
     const insert = this.db.prepare(
       "INSERT INTO address_points (street, lane, alley, house_number, village, neighborhood, lat, lon) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
     );
-    for (const p of points) {
-      insert.run(p.street, p.lane, p.alley, p.houseNumber, p.village, p.neighborhood, p.coordinate.lat, p.coordinate.lon);
+    this.db.exec("BEGIN");
+    try {
+      for (const p of points) {
+        insert.run(p.street, p.lane, p.alley, p.houseNumber, p.village, p.neighborhood, p.coordinate.lat, p.coordinate.lon);
+      }
+      this.db.exec("COMMIT");
+    } catch (err) {
+      this.db.exec("ROLLBACK");
+      throw err;
     }
   }
 
-  findExact(parsed: ParsedAddress): VillageNeighborhoodMatch | undefined {
+  findExact(parsed: ParsedAddress): VillageNeighborhood | undefined {
     const row = this.db
       .prepare(
         "SELECT street, house_number, village, neighborhood FROM address_points WHERE street = ? AND lane = ? AND alley = ? AND house_number = ? LIMIT 1",
@@ -72,7 +73,7 @@ export class AddressPointStore {
   }
 
   /** Nearest door plate within maxDistanceMeters, or undefined if none is close enough (ADR-0011). */
-  findNearest(coordinate: Coordinate, maxDistanceMeters: number): VillageNeighborhoodMatch | undefined {
+  findNearest(coordinate: Coordinate, maxDistanceMeters: number): VillageNeighborhood | undefined {
     for (const row of this.rowsInBoundingBox(coordinate, maxDistanceMeters)) {
       const distance = haversineDistanceMeters(coordinate, { lat: row.lat, lon: row.lon });
       if (distance <= maxDistanceMeters) {

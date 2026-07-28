@@ -14,13 +14,19 @@ export type SchoolDistrictMatch = { status: "found"; schoolName: string } | { st
  * 里/鄰 (+ coordinate, for carve-out resolution) -> school name, or
  * needs-manual-review when no rule covers the neighborhood outright and no
  * carve-out clause can be resolved (ADR-0010).
- *
- * Per ADR-0009, this is intentionally never cached: the school-district
- * table file is re-read from disk on every call, same reasoning as
- * ZoneLookup not caching zone judgments — school-district assignment is
- * revised yearly, and a cached result would go silently stale.
  */
-export class SchoolDistrictLookup {
+export interface SchoolDistrictLookup {
+  match(village: string, neighborhood: string, coordinate: Coordinate): SchoolDistrictMatch;
+}
+
+/**
+ * Per ADR-0009, this implementation is intentionally never cached: the
+ * school-district table file is re-read from disk on every call, same
+ * reasoning as ZoneLookup not caching zone judgments — school-district
+ * assignment is revised yearly, and a cached result would go silently
+ * stale.
+ */
+export class JsonSchoolDistrictLookup implements SchoolDistrictLookup {
   constructor(
     private readonly tableDataPath: string,
     private readonly addressPointStore: AddressPointStore,

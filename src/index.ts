@@ -8,7 +8,7 @@ import { PropertyQueryService } from "./property-query/PropertyQueryService.ts";
 import { AddressPointStore } from "./address-to-village/AddressPointStore.ts";
 import { VillageNeighborhoodCache } from "./address-to-village/VillageNeighborhoodCache.ts";
 import { AddressToVillageService } from "./address-to-village/AddressToVillageService.ts";
-import { SchoolDistrictLookup } from "./school-district/SchoolDistrictLookup.ts";
+import { JsonSchoolDistrictLookup } from "./school-district/SchoolDistrictLookup.ts";
 import { SchoolDistrictService } from "./school-district/SchoolDistrictService.ts";
 
 export { PropertyQueryService } from "./property-query/PropertyQueryService.ts";
@@ -54,8 +54,8 @@ export function buildPropertyQueryService(config: ProductionConfig): PropertyQue
   const addressPointStore = new AddressPointStore(config.addressPointsDbPath);
   const villageCache = new VillageNeighborhoodCache(config.villageNeighborhoodCacheDbPath);
   const addressToVillage = new AddressToVillageService(geocodingClient, addressPointStore, villageCache);
-  const elementaryLookup = new SchoolDistrictLookup(config.elementarySchoolDistrictDataPath, addressPointStore);
-  const juniorHighLookup = new SchoolDistrictLookup(config.juniorHighSchoolDistrictDataPath, addressPointStore);
+  const elementaryLookup = new JsonSchoolDistrictLookup(config.elementarySchoolDistrictDataPath, addressPointStore);
+  const juniorHighLookup = new JsonSchoolDistrictLookup(config.juniorHighSchoolDistrictDataPath, addressPointStore);
   const schoolDistrictService = new SchoolDistrictService(geocodingClient, addressToVillage, elementaryLookup, juniorHighLookup);
 
   return new PropertyQueryService(addressToZone, transactionStore, schoolDistrictService);

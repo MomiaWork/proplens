@@ -11,7 +11,7 @@ import type { Coordinate } from "../shared/Coordinate.ts";
 import { AddressPointStore, type AddressPoint } from "../address-to-village/AddressPointStore.ts";
 import { VillageNeighborhoodCache } from "../address-to-village/VillageNeighborhoodCache.ts";
 import { AddressToVillageService } from "../address-to-village/AddressToVillageService.ts";
-import { SchoolDistrictLookup } from "../school-district/SchoolDistrictLookup.ts";
+import { JsonSchoolDistrictLookup } from "../school-district/SchoolDistrictLookup.ts";
 import { SchoolDistrictService } from "../school-district/SchoolDistrictService.ts";
 
 /**
@@ -70,6 +70,7 @@ export const addressBook = new Map<string, Coordinate>([
   ["台中市住宅區信義街10號", { lat: 24.153, lon: 120.642 }], // 興安里第5鄰, resolvable carve-out (north of 仁愛街 reference point)
   ["台中市住宅區忠孝路145號", { lat: 24.154, lon: 120.644 }], // 大同里第8鄰, unparseable carve-out
   ["台中市住宅區示範路5號", { lat: 24.1551, lon: 120.6451 }], // not in the 門牌 fixture; ~15m from 示範路1號's door plate
+  ["台中市住宅區示範路9號", { lat: 24.159, lon: 120.649 }], // not in the 門牌 fixture; >200m from every door plate (fallback threshold miss)
   // transaction addresses (住宅區: 6, above threshold)
   ["住宅區交易1號", { lat: 24.151, lon: 120.641 }],
   ["住宅區交易2號", { lat: 24.152, lon: 120.642 }],
@@ -111,8 +112,8 @@ export async function buildFixturePropertyQueryService(): Promise<PropertyQueryS
   const villageCache = new VillageNeighborhoodCache(":memory:");
   const addressToVillage = new AddressToVillageService(geocodingClient, addressPointStore, villageCache);
 
-  const elementaryLookup = new SchoolDistrictLookup(elementaryDistrictDataPath, addressPointStore);
-  const juniorHighLookup = new SchoolDistrictLookup(juniorHighDistrictDataPath, addressPointStore);
+  const elementaryLookup = new JsonSchoolDistrictLookup(elementaryDistrictDataPath, addressPointStore);
+  const juniorHighLookup = new JsonSchoolDistrictLookup(juniorHighDistrictDataPath, addressPointStore);
   const schoolDistrictService = new SchoolDistrictService(geocodingClient, addressToVillage, elementaryLookup, juniorHighLookup);
 
   return new PropertyQueryService(addressToZone, store, schoolDistrictService);
