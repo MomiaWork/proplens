@@ -5,36 +5,32 @@ npm scripts in the root `package.json`. Nothing here is reachable from `index.ts
 so Metro never bundles it and its Node-only dependencies (`node:sqlite`,
 `shapefile`, `proj4`, `adm-zip`) stay out of the app.
 
-## Live — builds the data the app downloads
+Everything here is a **data producer**. The query engine lives in `src/core/`;
+these scripts build the files it reads, and publish them to GitHub Releases for
+`src/device/dataSync.ts` to download.
 
 | Script | Entry point | Output |
 | --- | --- | --- |
 | `npm run ingest:address-points` | `dev/downloadAddressPoints.ts` | `data/address-points.sqlite` |
 | `npm run ingest:school-districts` | `dev/downloadSchoolDistrictTables.ts` | `data/school-district-*.json` |
+| `npm run ingest:transactions` | `dev/downloadTransactions.ts` | `data/transactions.sqlite` |
 | `npm run convert:zoning` | `dev/convertZoningShpToGeoJson.ts` | `data/taichung-zoning.geojson` |
 
-`transactions.sqlite` is currently built as a side effect of `npm run dev:server:real`
-(`dev/realWorld.ts` runs the 實價登錄 ETL on startup). It deserves its own
-`ingest:transactions` entry point.
+`transactions.sqlite` ships with `zone_name` NULL on purpose — per ADR-0014 the
+phone fills that column in itself with its free on-device geocoder.
 
-## Pending removal — the pre-on-device engine
+**Republishing needs a new release tag, never `--clobber` onto the existing one:**
+`dataSync.ts` decides whether to re-download by comparing `releases/latest`'s
+`tag_name` against the cached one, so overwriting assets under the same tag ships
+data no phone will ever fetch.
 
-`property-query/`, `address-to-zone/`, `address-to-village/AddressToVillageService.ts`,
-`school-district/SchoolDistrictService.ts`, `zoning/ZoneLookup.ts`,
-`school-district/SchoolDistrictLookup.ts`, `geocoding/`, `dev/fixtureWorld.ts`,
-`dev/httpServer.ts`, `server.ts`, `server.real.ts`, `index.ts`.
+## The stores here are write-only
 
-This is the Node implementation of the query engine from before the app went
-on-device. `src/device/` is now the shipping implementation, and these files are a
-second copy of the same logic.
+`address-to-village/AddressPointStore.ts` and `transactions/TransactionStore.ts`
+create the schema and insert rows; they have no read methods. Every read — in the
+app and in the test suite alike — goes through `src/core/stores.ts`, so the SQL
+that queries these files exists once.
 
-They are still here for one reason: **`property-query/PropertyQueryService.test.ts`
-is the only test suite in the repo**, and it tests this copy — not the one that
-ships. The next step is to point those spec tests at `src/device/propertyQueryService.ts`
-(which needs the SQLite and file-read seams pulled into `src/core/` as interfaces),
-and then delete everything in this section. The suite is 11 tests.
-
-The `node:sqlite` stores are the exception — `address-to-village/AddressPointStore.ts`,
-`address-to-village/VillageNeighborhoodCache.ts`, `transactions/TransactionStore.ts`,
-`transactions/TransactionEtl.ts` and `transactions/TaichungLvrDownloader.ts` are how
-the pipeline *writes* the SQLite files, so they stay.
+The schema is therefore asserted in two places: here, and in
+`tests/fixtureWorld.ts`, which builds the same tables to run the spec suite
+against. Change a column here and the suite fails, which is the point.

@@ -1,18 +1,10 @@
-// GeocodingClient interface mirrors tools/geocoding/GeocodingClient.ts.
-// CachingGeocodingClient mirrors tools/geocoding/CachingGeocodingClient.ts
-// (only GeocodingCache's storage moved from node:sqlite to expo-sqlite —
-// see db.ts). AppleLocationGeocodingClient has no server-side equivalent:
-// it uses expo-location's on-device geocoder (Apple/Android's own, same
-// one iOS Shortcuts' "Get Details of Location" action uses) instead of a
-// network API — free, no quota, no API key shipped in the app bundle. See
-// ADR-0014 for why the mobile app no longer calls Google at all.
+// The on-device geocoder: expo-location's geocodeAsync (Apple/Android's
+// own, the same service iOS Shortcuts' "Get Details of Location" action
+// uses) — free, no quota, no API key shipped in the app bundle. See
+// ADR-0014 for why the app no longer calls Google at all.
 import * as Location from "expo-location";
 import type { Coordinate } from "../core/geo";
-import type { GeocodingCache } from "./db";
-
-export interface GeocodingClient {
-  geocode(address: string): Promise<Coordinate | null>;
-}
+import { type GeocodingClient, GeocodingRateLimitError } from "../core/geocoding";
 
 // CLGeocoder is "on-device" only in the sense that it needs no API key or
 // server of ours — it still round-trips to Apple's map servers, and Apple
@@ -32,7 +24,7 @@ function sleep(ms: number): Promise<void> {
 }
 
 /** True for the throttling error specifically, as opposed to a bad address or no network. */
-export function isGeocodingRateLimitError(err: unknown): boolean {
+function isAppleRateLimitError(err: unknown): boolean {
   return (err as { code?: string })?.code === RATE_LIMIT_ERROR_CODE;
 }
 
@@ -71,32 +63,17 @@ export class AppleLocationGeocodingClient implements GeocodingClient {
         return result ? { lat: result.latitude, lon: result.longitude } : null;
       } catch (err) {
         this.lastRequestAt = Date.now();
-        if (!isGeocodingRateLimitError(err) || attempt >= MAX_RATE_LIMIT_RETRIES) {
+        if (!isAppleRateLimitError(err)) {
           throw err;
+        }
+        if (attempt >= MAX_RATE_LIMIT_RETRIES) {
+          // Out of retries: hand core the domain error it knows how to
+          // stop-and-resume on, so Apple's error code stays in this file.
+          throw new GeocodingRateLimitError(undefined, { cause: err });
         }
         // Already throttled — back off well past the pacing interval.
         await sleep(RETRY_BASE_DELAY_MS * 2 ** attempt);
       }
     }
-  }
-}
-
-export class CachingGeocodingClient implements GeocodingClient {
-  constructor(
-    private readonly inner: GeocodingClient,
-    private readonly cache: GeocodingCache,
-  ) {}
-
-  async geocode(address: string): Promise<Coordinate | null> {
-    const cached = this.cache.get(address);
-    if (cached) {
-      return cached;
-    }
-
-    const result = await this.inner.geocode(address);
-    if (result) {
-      this.cache.set(address, result);
-    }
-    return result;
   }
 }

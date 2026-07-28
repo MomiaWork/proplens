@@ -1,17 +1,13 @@
-// The shipping 物件查詢 engine. tools/address-to-zone/AddressToZoneService.ts,
-// tools/address-to-village/AddressToVillageService.ts,
-// tools/school-district/SchoolDistrictService.ts and
-// tools/property-query/PropertyQueryService.ts are the pre-on-device
-// originals, still around only because the spec test suite points at them
-// — see tools/README.md. Control flow ported almost verbatim; the only
-// real difference is that GeoJsonZoneLookup and JsonSchoolDistrictLookup
-// are async here (file reads are async in RN), where those are sync.
-import type { Coordinate } from "../core/geo";
+// The 物件查詢 engine: address in, 物件資訊卡 out. Platform-free — every
+// dependency below is either pure logic or one of the seams in sqlite.ts /
+// files.ts / geocoding.ts, so the phone and the test suite run this exact
+// code (src/device/queryEngine.ts is the app's composition root,
+// tests/fixtureWorld.ts the test suite's).
 import type { GeocodingClient } from "./geocoding";
 import type { GeoJsonZoneLookup } from "./zoneLookup";
-import type { AddressPointStore, TransactionStore, VillageNeighborhoodCache, VillageNeighborhood, ValidTransaction } from "./db";
+import type { AddressPointStore, TransactionStore, VillageNeighborhoodCache, VillageNeighborhood, ValidTransaction } from "./stores";
 import type { JsonSchoolDistrictLookup } from "./schoolDistrictLookup";
-import { parseAddress } from "../core/parseAddress";
+import { parseAddress } from "./parseAddress";
 
 export type AddressToZoneResult =
   | { status: "ok"; zoneName: string }

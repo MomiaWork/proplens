@@ -6,10 +6,7 @@ export interface RawTransactionRecord {
   price: number;
 }
 
-/** A transaction confirmed to be reported under 實價登錄2.0 (2021/7 onward). */
-export interface ValidTransaction {
-  address: string;
-  /** ISO format, e.g. "2021-07-15" */
-  transactionDate: string;
-  price: number;
-}
+// A record that survives validity filtering is a ValidTransaction, defined
+// in src/core/stores.ts — the engine reads the same rows this pipeline
+// writes, so there's one definition of that shape, not two.
+export type { ValidTransaction } from "../../src/core/stores";

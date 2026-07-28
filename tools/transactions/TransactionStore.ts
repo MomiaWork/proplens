@@ -1,6 +1,7 @@
 import { DatabaseSync } from "node:sqlite";
 import { createHash } from "node:crypto";
-import type { ValidTransaction } from "./types";
+import type { ValidTransaction } from "../../src/core/stores";
+import type { TransactionSink } from "./TransactionEtl";
 
 function naturalKey(transaction: ValidTransaction): string {
   return createHash("sha1")
@@ -9,12 +10,17 @@ function naturalKey(transaction: ValidTransaction): string {
 }
 
 /**
- * Stores 有效交易紀錄 (valid transactions). Upserts are keyed on a hash of
+ * Writes 有效交易紀錄 (valid transactions). Upserts are keyed on a hash of
  * (address, date, price) rather than an ID from the source data, so
  * re-running the ETL against overlapping downloads never creates duplicate
  * rows.
+ *
+ * zone_name is left NULL here on purpose (ADR-0014): the phone fills it in
+ * after downloading the snapshot, using its own free geocoder. Write-only
+ * for the same reason as AddressPointStore — reads go through
+ * src/core/stores.ts.
  */
-export class TransactionStore {
+export class TransactionStore implements TransactionSink {
   private readonly db: DatabaseSync;
 
   constructor(dbPath: string) {
@@ -40,46 +46,10 @@ export class TransactionStore {
     }
   }
 
-  all(): ValidTransaction[] {
-    const rows = this.db.prepare("SELECT address, transaction_date, price FROM valid_transactions").all() as Array<{
-      address: string;
-      transaction_date: string;
-      price: number;
-    }>;
-    return rows.map((row) => ({ address: row.address, transactionDate: row.transaction_date, price: row.price }));
-  }
-
-  findByAddress(address: string): ValidTransaction[] {
-    const rows = this.db
-      .prepare("SELECT address, transaction_date, price FROM valid_transactions WHERE address = ?")
-      .all(address) as Array<{ address: string; transaction_date: string; price: number }>;
-    return rows.map((row) => ({ address: row.address, transactionDate: row.transaction_date, price: row.price }));
-  }
-
-  /**
-   * Same-zone transactions by pre-computed zone_name (see
-   * enrichTransactionZones.ts / ADR-0012) — a plain indexed lookup, not a
-   * live geocode+point-in-polygon per transaction. That per-query
-   * re-resolution is what made same-zone aggregation impractical on a
-   * phone starting from a cold geocoding cache.
-   */
-  findByZone(zoneName: string): ValidTransaction[] {
-    const rows = this.db
-      .prepare("SELECT address, transaction_date, price FROM valid_transactions WHERE zone_name = ?")
-      .all(zoneName) as Array<{ address: string; transaction_date: string; price: number }>;
-    return rows.map((row) => ({ address: row.address, transactionDate: row.transaction_date, price: row.price }));
-  }
-
-  /** Rows not yet enriched with a zone_name — see enrichTransactionZones.ts. */
-  findUnresolvedZones(): Array<{ id: string; address: string }> {
-    return this.db.prepare("SELECT id, address FROM valid_transactions WHERE zone_name IS NULL").all() as Array<{
-      id: string;
-      address: string;
-    }>;
-  }
-
-  setZone(id: string, zoneName: string | null): void {
-    this.db.prepare("UPDATE valid_transactions SET zone_name = ? WHERE id = ?").run(zoneName, id);
+  /** Row count, so the ingest script can report what it wrote. */
+  count(): number {
+    const row = this.db.prepare("SELECT COUNT(*) AS n FROM valid_transactions").get() as { n: number };
+    return row.n;
   }
 
   close(): void {

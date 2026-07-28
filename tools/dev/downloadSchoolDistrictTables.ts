@@ -1,10 +1,10 @@
 import { writeFileSync } from "node:fs";
 import AdmZip from "adm-zip";
-import type { SchoolDistrictRawRow } from "../school-district/SchoolDistrictLookup";
+import type { SchoolDistrictRawRow } from "../../src/core/schoolDistrictLookup";
 
 /**
  * Downloads and converts the real 臺中市國民小學/國民中學學區表 datasets
- * into the SchoolDistrictRawRow[] JSON shape SchoolDistrictLookup expects.
+ * into the SchoolDistrictRawRow[] JSON shape src/core/schoolDistrictLookup.ts expects.
  *
  * Both catalog pages advertise a Swagger/API domain (datacenter.taichung.gov.tw)
  * that's dead — same trap as the Phase 1 zoning dataset (see ADR-0008 and

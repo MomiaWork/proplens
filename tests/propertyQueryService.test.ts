@@ -1,13 +1,13 @@
 import { describe, it, expect } from "vitest";
-import { buildFixturePropertyQueryService } from "../dev/fixtureWorld";
+import { buildFixturePropertyQueryService } from "./fixtureWorld";
 
 /**
  * Black-box tests for the 物件查詢 service — the spec's single agreed seam
- * (see spec.md "Testing Decisions"). Only the geocoding API boundary is
- * stubbed (FixtureGeocodingClient, via buildFixturePropertyQueryService);
- * zoning, ETL, aggregation, 門牌比對, and 學區文字表比對 all run real logic
- * against fixture data. See ../dev/fixtureWorld.ts for the fixture data
- * itself.
+ * (see spec.md "Testing Decisions"). This runs the engine the app ships
+ * (src/core), with only the platform seams swapped for node ones and the
+ * geocoder stubbed; zoning, aggregation, 門牌比對 and 學區文字表比對 all run
+ * real logic against fixture data. See ./fixtureWorld.ts for the fixture
+ * data itself.
  */
 
 describe("PropertyQueryService", () => {

@@ -1,17 +1,14 @@
-// The device-side stores: expo-sqlite ports of the node:sqlite ones the
-// pipeline writes with (tools/address-to-village/AddressPointStore.ts,
-// VillageNeighborhoodCache.ts, tools/geocoding/GeocodingCache.ts and
-// tools/transactions/TransactionStore.ts). The read paths are a second
-// copy of the same SQL pending consolidation — see tools/README.md.
+// The read side of every SQLite file the query engine touches, written
+// once against the SqliteDatabase seam so the phone (expo-sqlite) and the
+// test suite (node:sqlite) run the same SQL.
 //
-// The port was needed because RN has no node:sqlite. SQLite is a portable
-// file format, so the pre-built .sqlite files downloaded by dataSync.ts
-// (built by the pipeline's node:sqlite code) open here unmodified — only
-// the two device-local caches are ever written to on the phone.
-import * as SQLite from "expo-sqlite";
-import type { Coordinate } from "../core/geo";
-import { haversineDistanceMeters } from "../core/geo";
-import type { ParsedAddress } from "../core/parseAddress";
+// SQLite is a portable file format: the .sqlite files the pipeline builds
+// with node:sqlite and dataSync.ts downloads open here unmodified. Only
+// the two device-local caches are ever written to at query time.
+import type { SqliteDatabase } from "./sqlite";
+import type { Coordinate } from "./geo";
+import { haversineDistanceMeters } from "./geo";
+import type { ParsedAddress } from "./parseAddress";
 
 export interface VillageNeighborhood {
   village: string;
@@ -32,9 +29,9 @@ export interface ValidTransaction {
  */
 const SAME_BUILDING_TOLERANCE_METERS = 100;
 
-/** Read-only: address-points.sqlite is pre-built server-side and downloaded as-is. */
+/** Read-only: address-points.sqlite is pre-built by the pipeline and shipped as-is. */
 export class AddressPointStore {
-  constructor(private readonly db: SQLite.SQLiteDatabase) {}
+  constructor(private readonly db: SqliteDatabase) {}
 
   findExact(parsed: ParsedAddress): VillageNeighborhood | undefined {
     const row = this.db.getFirstSync<{ street: string; house_number: string; village: string; neighborhood: string }>(
@@ -143,14 +140,14 @@ export class AddressPointStore {
 }
 
 /**
- * transactions.sqlite's rows (address/date/price) are pre-built
- * server-side and downloaded as-is — but per ADR-0014, zone_name is no
- * longer precomputed server-side (that needed Google), so this store is
- * responsible for filling zone_name in on-device, via
- * enrichTransactionZones.ts, using the free on-device geocoder.
+ * transactions.sqlite's rows (address/date/price) are pre-built by the
+ * pipeline and shipped as-is — but per ADR-0014, zone_name is no longer
+ * precomputed there (that needed Google), so this store is responsible for
+ * filling zone_name in on-device, via enrichTransactionZones.ts, using the
+ * free on-device geocoder.
  */
 export class TransactionStore {
-  constructor(private readonly db: SQLite.SQLiteDatabase) {}
+  constructor(private readonly db: SqliteDatabase) {}
 
   all(): ValidTransaction[] {
     const rows = this.db.getAllSync<{ address: string; transaction_date: string; price: number }>(
@@ -180,7 +177,7 @@ export class TransactionStore {
 
 /** Device-local cache the phone builds up itself as it resolves addresses -> 里/鄰 (ADR-0009). */
 export class VillageNeighborhoodCache {
-  constructor(private readonly db: SQLite.SQLiteDatabase) {
+  constructor(private readonly db: SqliteDatabase) {
     this.db.execSync(`
       CREATE TABLE IF NOT EXISTS village_neighborhood_cache (
         address TEXT PRIMARY KEY,
@@ -217,7 +214,7 @@ export class VillageNeighborhoodCache {
 
 /** Device-local cache the phone builds up itself as it geocodes addresses (ADR-0007). */
 export class GeocodingCache {
-  constructor(private readonly db: SQLite.SQLiteDatabase) {
+  constructor(private readonly db: SqliteDatabase) {
     this.db.execSync(`
       CREATE TABLE IF NOT EXISTS geocoding_cache (
         address TEXT PRIMARY KEY,

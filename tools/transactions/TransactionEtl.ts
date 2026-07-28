@@ -1,9 +1,14 @@
+import type { ValidTransaction } from "../../src/core/stores";
 import type { TransactionDownloader } from "./TransactionDownloader";
-import type { TransactionStore } from "./TransactionStore";
 import { rocDateToIso } from "./RocDate";
 
 /** 實價登錄2.0 went live 2021/7; earlier records use un-geocodable 區段化地址. */
 const VALIDITY_CUTOFF_ISO = "2021-07-01";
+
+/** Just the write path TransactionStore exposes — keeps the ETL testable without a database. */
+export interface TransactionSink {
+  upsertMany(transactions: ValidTransaction[]): void;
+}
 
 /**
  * Downloads the current 實價登錄 batch, keeps only records reported on or
@@ -13,7 +18,7 @@ const VALIDITY_CUTOFF_ISO = "2021-07-01";
 export class TransactionEtl {
   constructor(
     private readonly downloader: TransactionDownloader,
-    private readonly store: TransactionStore,
+    private readonly store: TransactionSink,
   ) {}
 
   async run(): Promise<void> {

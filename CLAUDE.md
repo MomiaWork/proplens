@@ -5,21 +5,27 @@ the whole query engine on-device (ADR-0013/0014).
 
 ```
 App.tsx  index.ts  app.json   the app shell
-src/core/                     pure TypeScript, shared by the app and tools/
-src/device/                   on-device code (expo-sqlite, expo-location, expo-file-system)
-tools/                        runs on your computer only, via tsx — data ingestion
-                              and conversion (see tools/README.md)
+src/core/                     the whole query engine — pure TypeScript, no platform APIs
+src/device/                   thin adapters: expo-sqlite, expo-file-system, expo-location,
+                              plus dataSync and the app's composition root
+tools/                        runs on your computer only, via tsx — builds the data files
+                              the app downloads (see tools/README.md)
+tests/                        the spec suite, wiring src/core to node adapters
 data/                         pipeline output, gitignored, published via GitHub Releases
 ```
 
 **`src/core/` must not import `expo-*`, `react`, `react-native`, or `node:*`.**
-That rule is the only thing keeping the app and the pipeline from drifting into two
-copies of the same logic again — every file there is imported by both sides.
-Platform differences go through an interface defined in `src/core/`, implemented
-once in `src/device/` and once in `tools/`.
+Platform differences go through a seam declared in core — `sqlite.ts`, `files.ts`,
+`geocoding.ts` — implemented once in `src/device/` (expo) and once in
+`tests/nodeAdapters.ts` (node). That is what lets the test suite exercise the
+code that actually ships instead of a parallel copy of it, and what keeps the
+app and the pipeline from drifting into two implementations of the same logic.
 
-Anything under `tools/` is free to use Node APIs; it is never reachable from
-`index.ts`, so Metro never bundles it.
+Business logic belongs in `src/core/` even when only the app uses it today.
+`src/device/` should stay adapters and wiring.
+
+Anything under `tools/` and `tests/` is free to use Node APIs; neither is
+reachable from `index.ts`, so Metro never bundles them.
 
 ### Expo
 

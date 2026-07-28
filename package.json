@@ -10,11 +10,10 @@
     "web": "expo start --web",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
-    "dev:server": "tsx tools/server.ts",
-    "dev:server:real": "tsx --env-file-if-exists=.env tools/server.real.ts",
     "convert:zoning": "tsx tools/dev/convertZoningShpToGeoJson.ts",
     "ingest:school-districts": "tsx tools/dev/downloadSchoolDistrictTables.ts",
-    "ingest:address-points": "tsx tools/dev/downloadAddressPoints.ts"
+    "ingest:address-points": "tsx tools/dev/downloadAddressPoints.ts",
+    "ingest:transactions": "tsx tools/dev/downloadTransactions.ts"
   },
   "dependencies": {
     "@turf/boolean-point-in-polygon": "^7.3.5",

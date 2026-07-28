@@ -17,4 +17,4 @@ tools/                        只在電腦上跑（tsx + node:sqlite / shapefile
 
 App 目錄不用 `src/app/`：Expo CLI 會把 `src/app/` 認成 expo-router 的路由根目錄（實測 `expo export` 會印出 `Using src/app as the root directory for Expo Router`），因此命名為 `src/device/`。
 
-**尚未解決**：`tools/` 底下仍留著上機前的 Node 版查詢引擎（`property-query/`、`address-to-zone/`、`geocoding/` 等），因為 repo 唯一的測試套件（11 個 spec 測試）測的是那一份，而不是實際出貨的 `src/device/`。下一步是把測試接到 `src/device/propertyQueryService.ts`——需要先把 SQLite 與檔案讀取兩個接縫抽成 `src/core/` 的介面——然後把那批檔案刪掉。清單見 `tools/README.md`。
+當時尚未解決的一件事：`tools/` 底下仍留著上機前的 Node 版查詢引擎，因為 repo 唯一的測試套件測的是那一份，而不是實際出貨的程式。**已於 ADR-0016 處理**——查詢引擎整個收進 `src/core/`，平台差異走三個介面，測試接上出貨引擎，那批舊檔案刪除。`src/device/` 現在只剩 adapter 與組裝。
