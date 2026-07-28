@@ -12,7 +12,7 @@ import {
   View,
 } from 'react-native';
 import { API_BASE_URL } from './config';
-import type { PropertyCard } from './propertyCard';
+import type { PropertyCard, SchoolDistrictFieldResult } from './propertyCard';
 
 export default function App() {
   const [address, setAddress] = useState('台中市住宅區示範路1號');
@@ -94,8 +94,24 @@ function PropertyCardView({ card }: { card: PropertyCard }) {
           ))}
         </>
       )}
+
+      <Text style={styles.cardLabel}>國小學區</Text>
+      <Text style={styles.cardValue}>{describeSchoolDistrict(card.elementarySchoolDistrict)}</Text>
+      <Text style={styles.cardLabel}>國中學區</Text>
+      <Text style={styles.cardValue}>{describeSchoolDistrict(card.juniorHighSchoolDistrict)}</Text>
     </View>
   );
+}
+
+function describeSchoolDistrict(result: SchoolDistrictFieldResult): string {
+  switch (result.status) {
+    case 'found':
+      return result.schoolName;
+    case 'needs-manual-review':
+      return '無法自動判定，需人工確認';
+    case 'address-not-in-registry':
+      return '查無對應門牌資料';
+  }
 }
 
 const styles = StyleSheet.create({
