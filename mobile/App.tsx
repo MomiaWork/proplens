@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import {
+  ActivityIndicator,
   Button,
   KeyboardAvoidingView,
   Platform,
@@ -11,27 +12,47 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import { API_BASE_URL } from './config';
-import type { PropertyCard, SchoolDistrictFieldResult } from './propertyCard';
+import { syncDataIfNeeded } from './lib/dataSync';
+import { getPropertyQueryService } from './lib/queryEngine';
+import type { PropertyCard, SchoolDistrictFieldResult } from './lib/queryEngine';
+
+type SyncState = { status: 'syncing'; message: string } | { status: 'ready' } | { status: 'error'; message: string };
 
 export default function App() {
-  const [address, setAddress] = useState('台中市住宅區示範路1號');
+  const [sync, setSync] = useState<SyncState>({ status: 'syncing', message: '準備中...' });
+  const [address, setAddress] = useState('台中市西屯區台灣大道三段99號');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [card, setCard] = useState<PropertyCard | null>(null);
+
+  useEffect(() => {
+    runSync();
+  }, []);
+
+  async function runSync() {
+    setSync({ status: 'syncing', message: '準備中...' });
+    try {
+      const result = await syncDataIfNeeded((message) => setSync({ status: 'syncing', message }));
+      getPropertyQueryService(result.updated);
+      setSync({ status: 'ready' });
+    } catch (err) {
+      setSync({
+        status: 'error',
+        message: `資料同步失敗，請確認網路連線後重試。\n(${String(err)})`,
+      });
+    }
+  }
 
   async function handleQuery() {
     setLoading(true);
     setError(null);
     setCard(null);
     try {
-      const response = await fetch(`${API_BASE_URL}/property?address=${encodeURIComponent(address)}`);
-      const data = (await response.json()) as PropertyCard;
-      setCard(data);
+      const service = getPropertyQueryService();
+      const result = await service.query(address);
+      setCard(result);
     } catch (err) {
-      setError(
-        `連線失敗，請確認：\n1. 手機與電腦在同一個 Wi-Fi\n2. 已在電腦執行 npm run dev:server\n3. config.ts 裡的 API_BASE_URL 是電腦的區網 IP\n\n(${String(err)})`,
-      );
+      setError(`查詢失敗：${String(err)}`);
     } finally {
       setLoading(false);
     }
@@ -43,6 +64,8 @@ export default function App() {
         <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
           <Text style={styles.title}>PropLens 物件查詢（POC）</Text>
 
+          {sync.status !== 'ready' && <SyncStatusView sync={sync} onRetry={runSync} />}
+
           <TextInput
             style={styles.input}
             value={address}
@@ -50,8 +73,13 @@ export default function App() {
             placeholder="輸入台中市地址"
             autoCapitalize="none"
             autoCorrect={false}
+            editable={sync.status === 'ready'}
           />
-          <Button title={loading ? '查詢中…' : '查詢'} onPress={handleQuery} disabled={loading} />
+          <Button
+            title={loading ? '查詢中…' : '查詢'}
+            onPress={handleQuery}
+            disabled={loading || sync.status !== 'ready'}
+          />
 
           {error && <Text style={styles.error}>{error}</Text>}
 
@@ -61,6 +89,23 @@ export default function App() {
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
+  );
+}
+
+function SyncStatusView({ sync, onRetry }: { sync: Exclude<SyncState, { status: 'ready' }>; onRetry: () => void }) {
+  if (sync.status === 'syncing') {
+    return (
+      <View style={styles.syncRow}>
+        <ActivityIndicator />
+        <Text style={styles.syncText}>{sync.message}</Text>
+      </View>
+    );
+  }
+  return (
+    <View>
+      <Text style={styles.error}>{sync.message}</Text>
+      <Button title="重試" onPress={onRetry} />
+    </View>
   );
 }
 
@@ -128,6 +173,8 @@ const styles = StyleSheet.create({
   },
   error: { color: '#c0392b', marginTop: 12 },
   warning: { color: '#b8860b', marginBottom: 8 },
+  syncRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 },
+  syncText: { fontSize: 13, color: '#666' },
   card: {
     marginTop: 20,
     padding: 16,

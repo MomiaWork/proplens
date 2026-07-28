@@ -1,5 +1,4 @@
-// Set this to your computer's LAN IP, printed when you run
-// `npm run dev:server` in the repo root. localhost won't work from a
-// physical phone — it has to be the computer's actual network address.
-// Example: 'http://192.168.1.23:4000'
-export const API_BASE_URL = 'http://192.168.5.222:4000';
+// Real secrets live in config.local.ts (gitignored, never committed — this
+// repo is public). If Metro fails to resolve that import, copy
+// config.local.example.ts to config.local.ts and fill in a real key.
+export { GOOGLE_MAPS_API_KEY } from "./config.local";

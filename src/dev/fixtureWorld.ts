@@ -6,6 +6,7 @@ import { FixtureGeocodingClient } from "../geocoding/FixtureGeocodingClient.ts";
 import { TransactionStore } from "../transactions/TransactionStore.ts";
 import { TransactionEtl } from "../transactions/TransactionEtl.ts";
 import { FixtureTransactionDownloader } from "../transactions/FixtureTransactionDownloader.ts";
+import { enrichTransactionZones } from "../transactions/enrichTransactionZones.ts";
 import type { RawTransactionRecord } from "../transactions/types.ts";
 import type { Coordinate } from "../shared/Coordinate.ts";
 import { AddressPointStore, type AddressPoint } from "../address-to-village/AddressPointStore.ts";
@@ -109,6 +110,7 @@ export async function buildFixturePropertyQueryService(): Promise<PropertyQueryS
   const store = new TransactionStore(":memory:");
   const etl = new TransactionEtl(new FixtureTransactionDownloader(rawTransactions), store);
   await etl.run();
+  await enrichTransactionZones(store, addressToZone);
 
   const addressPointStore = new AddressPointStore(":memory:");
   addressPointStore.insertMany(addressPoints);

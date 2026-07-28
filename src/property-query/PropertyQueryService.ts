@@ -40,7 +40,7 @@ export class PropertyQueryService {
     const { zoneName } = resolution;
 
     const schoolDistricts = await this.schoolDistrictService.resolve(address);
-    const sameZoneTransactions = await this.findSameZoneTransactions(zoneName);
+    const sameZoneTransactions = this.transactionStore.findByZone(zoneName);
 
     if (sameZoneTransactions.length < this.sampleThreshold) {
       return {
@@ -56,25 +56,5 @@ export class PropertyQueryService {
       sameZoneTransactions.reduce((sum, t) => sum + t.price, 0) / sameZoneTransactions.length;
 
     return { status: "ok", zoneName, averagePrice, sampleCount: sameZoneTransactions.length, ...schoolDistricts };
-  }
-
-  /**
-   * Re-resolves every stored transaction's zone on every call, by design:
-   * ADR-0007 forbids caching the zone judgment itself, since the zoning
-   * dataset updates unpredictably. This stays cheap because the geocoding
-   * step underneath (address -> coordinate) IS cached — each transaction
-   * address is only ever sent to the Geocoding API once, no matter how many
-   * property queries run afterward. Only the local point-in-polygon check
-   * re-runs every time.
-   */
-  private async findSameZoneTransactions(zoneName: string): Promise<ValidTransaction[]> {
-    const sameZone: ValidTransaction[] = [];
-    for (const transaction of this.transactionStore.all()) {
-      const transactionZone = await this.addressToZone.resolve(transaction.address);
-      if (transactionZone.status === "ok" && transactionZone.zoneName === zoneName) {
-        sameZone.push(transaction);
-      }
-    }
-    return sameZone;
   }
 }
