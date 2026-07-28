@@ -3,3 +3,33 @@ dist/
 *.sqlite
 .env
 data/
+
+# Expo
+.expo/
+web-build/
+expo-env.d.ts
+.metro-health-check*
+
+# generated native projects (npx expo prebuild)
+/ios
+/android
+.kotlin/
+*.orig.*
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+
+# local env files
+.env*.local
+
+# debug / tooling
+npm-debug.*
+yarn-debug.*
+yarn-error.*
+*.tsbuildinfo
+
+# macOS
+.DS_Store
+*.pem

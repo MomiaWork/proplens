@@ -1,32 +1,44 @@
 {
   "name": "proplens",
-  "version": "0.0.1",
+  "version": "1.0.0",
   "private": true,
-  "type": "module",
+  "main": "index.ts",
   "scripts": {
+    "start": "expo start",
+    "android": "expo run:android",
+    "ios": "expo run:ios",
+    "web": "expo start --web",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
-    "dev:server": "tsx src/server.ts",
-    "dev:server:real": "tsx --env-file-if-exists=.env src/server.real.ts",
-    "convert:zoning": "tsx src/dev/convertZoningShpToGeoJson.ts",
-    "ingest:school-districts": "tsx src/dev/downloadSchoolDistrictTables.ts",
-    "ingest:address-points": "tsx src/dev/downloadAddressPoints.ts"
+    "dev:server": "tsx tools/server.ts",
+    "dev:server:real": "tsx --env-file-if-exists=.env tools/server.real.ts",
+    "convert:zoning": "tsx tools/dev/convertZoningShpToGeoJson.ts",
+    "ingest:school-districts": "tsx tools/dev/downloadSchoolDistrictTables.ts",
+    "ingest:address-points": "tsx tools/dev/downloadAddressPoints.ts"
+  },
+  "dependencies": {
+    "@turf/boolean-point-in-polygon": "^7.3.5",
+    "@turf/helpers": "^7.3.5",
+    "expo": "^54.0.0",
+    "expo-file-system": "~19.0.23",
+    "expo-location": "~19.0.8",
+    "expo-sqlite": "~16.0.10",
+    "expo-status-bar": "~3.0.9",
+    "react": "19.1.0",
+    "react-native": "0.81.5"
   },
   "devDependencies": {
     "@types/adm-zip": "^0.5.8",
     "@types/geojson": "^7946.0.16",
     "@types/node": "^22.10.2",
     "@types/proj4": "^2.5.6",
+    "@types/react": "~19.1.10",
     "@types/shapefile": "^0.6.4",
-    "tsx": "^4.23.1",
-    "typescript": "^5.7.2",
-    "vitest": "^4.1.10"
-  },
-  "dependencies": {
-    "@turf/boolean-point-in-polygon": "^7.2.0",
-    "@turf/helpers": "^7.2.0",
     "adm-zip": "^0.6.0",
     "proj4": "^2.20.9",
-    "shapefile": "^0.6.6"
+    "shapefile": "^0.6.6",
+    "tsx": "^4.23.1",
+    "typescript": "~5.9.2",
+    "vitest": "^4.1.10"
   }
 }

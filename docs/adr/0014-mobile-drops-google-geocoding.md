@@ -12,3 +12,5 @@ ADR-0013 讓手機直接呼叫 Google Geocoding API v4，POC 階段接受 Demo K
 **衍生決定：交易分區的預先計算（ADR-0012）也搬到手機端做。** 原本 ADR-0012 讓電腦端在發布資料快照前，用 Google 把每筆交易的都市計畫分區算好存進 `transactions.sqlite`。既然手機不再依賴 Google，這一步沒必要留在電腦端（電腦端的 Node.js 環境本來就無法使用 `expo-location`，唯一的替代方案是 Nominatim，但如上所述準確度不可靠，不適合用在需要精準的分區判定）。改成：電腦端只跑 ETL、產出「分區欄位全部是 NULL」的 `transactions.sqlite` 快照發布上去；手機下載後，在資料同步流程裡自己跑一次 `mobile/lib/enrichTransactionZones.ts`（用裝置內建地理編碼 + 本地已有的都市計畫圖資做 point-in-polygon），把分區欄位補齊、存進手機本地的資料庫。只處理 `zone_name IS NULL` 的資料列，所以同一份快照重複同步不會重工。
 
 **現況**：電腦端 `src/dev/realWorld.ts`（`npm run dev:server:real` 用的那個手動測試工具）仍然使用 Google——這是獨立於手機 App 之外的電腦端互動測試工具，跟這次要解決的「手機額度耗盡」問題無關，沒有理由跟著改。它現在也不會再產生分區已算好的 `transactions.sqlite`（那個步驟被拿掉了），純粹作為電腦端的手動除錯用途保留。
+
+> 註：檔案路徑已於 ADR-0015 改動——`mobile/lib/` 現為 `src/device/`，`src/dev/realWorld.ts` 現為 `tools/dev/realWorld.ts`。

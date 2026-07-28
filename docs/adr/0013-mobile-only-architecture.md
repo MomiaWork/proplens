@@ -10,3 +10,5 @@ Phase 1／Phase 2 前半段的架構是：手機 App 是薄前端，Google Geoco
 2. **交易分區預先算好**：見 ADR-0012——手機端 geocoding 快取從零開始，若沿用「每次查詢都重新對所有交易地址做一次分區判定」的舊做法，會在第一次查詢就打爆額度。改成資料發佈時就把每筆交易的分區算好存進 `transactions.sqlite`。
 
 資料檔案來源見 GitHub Release `data-2026-07-28`（`https://github.com/MomiaWork/proplens/releases`），下載邏輯見 `mobile/lib/dataSync.ts`。
+
+> 註：檔案路徑已於 ADR-0015 改動——`mobile/lib/` 現為 `src/device/`，舊的 `src/` Node 模組現為 `tools/`。
