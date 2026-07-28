@@ -54,6 +54,8 @@ export const addressPoints: AddressPoint[] = [
   { street: "仁愛街", lane: "", alley: "", houseNumber: "２０號", village: "興安里", neighborhood: "005", coordinate: { lat: 24.152, lon: 120.642 } },
   // 大同里 第8鄰 — unparseable carve-out scenario
   { street: "忠孝路", lane: "", alley: "", houseNumber: "１４５號", village: "大同里", neighborhood: "008", coordinate: { lat: 24.154, lon: 120.644 } },
+  // 東橋里 — 全里 (whole-village) clause, half-width parens in the elementary fixture row
+  { street: "東橋路", lane: "", alley: "", houseNumber: "１號", village: "東橋里", neighborhood: "099", coordinate: { lat: 24.156, lon: 120.643 } },
   // Note: 台中市住宅區示範路5號 is intentionally NOT in this list, to exercise the nearest-door-plate fallback (see addressBook below).
 ];
 
@@ -71,6 +73,7 @@ export const addressBook = new Map<string, Coordinate>([
   ["台中市住宅區忠孝路145號", { lat: 24.154, lon: 120.644 }], // 大同里第8鄰, unparseable carve-out
   ["台中市住宅區示範路5號", { lat: 24.1551, lon: 120.6451 }], // not in the 門牌 fixture; ~15m from 示範路1號's door plate
   ["台中市住宅區示範路9號", { lat: 24.159, lon: 120.649 }], // not in the 門牌 fixture; >200m from every door plate (fallback threshold miss)
+  ["台中市住宅區東橋路1號", { lat: 24.156, lon: 120.643 }], // 東橋里, 全里 clause (half-width parens in the source row)
   // transaction addresses (住宅區: 6, above threshold)
   ["住宅區交易1號", { lat: 24.151, lon: 120.641 }],
   ["住宅區交易2號", { lat: 24.152, lon: 120.642 }],

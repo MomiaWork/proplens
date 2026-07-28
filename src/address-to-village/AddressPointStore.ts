@@ -59,6 +59,26 @@ export class AddressPointStore {
     }
   }
 
+  /**
+   * Replaces the entire table with `points` in one transaction. There's no
+   * natural per-row dedup key across monthly 門牌 snapshots (a door plate's
+   * own coordinate/鄰 can change between months), so re-ingesting a fresh
+   * snapshot means starting clean rather than upserting — see
+   * downloadAddressPoints.ts, which re-runs this against the same on-disk
+   * file every time the dataset is refreshed.
+   */
+  replaceAll(points: AddressPoint[]): void {
+    this.db.exec("BEGIN");
+    try {
+      this.db.exec("DELETE FROM address_points");
+      this.db.exec("COMMIT");
+    } catch (err) {
+      this.db.exec("ROLLBACK");
+      throw err;
+    }
+    this.insertMany(points);
+  }
+
   findExact(parsed: ParsedAddress): VillageNeighborhood | undefined {
     const row = this.db
       .prepare(

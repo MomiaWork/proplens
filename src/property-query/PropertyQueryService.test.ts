@@ -117,6 +117,16 @@ describe("PropertyQueryService", () => {
       }
     });
 
+    it("全里案例：整里對應單一學校（含半形括號寫法），不需列出鄰號", async () => {
+      const service = await buildFixturePropertyQueryService();
+      const card = await service.query("台中市住宅區東橋路1號");
+      expect(card.status).toBe("ok");
+      if (card.status === "ok" || card.status === "insufficient-sample") {
+        expect(card.elementarySchoolDistrict).toEqual({ status: "found", schoolName: "東橋國小" });
+        expect(card.juniorHighSchoolDistrict).toEqual({ status: "found", schoolName: "東橋國中" });
+      }
+    });
+
     it("最近門牌點超過200公尺門檻案例：回傳查無對應門牌，不影響卡片其餘欄位", async () => {
       const service = await buildFixturePropertyQueryService();
       const card = await service.query("台中市住宅區示範路9號");

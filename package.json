@@ -8,7 +8,9 @@
     "typecheck": "tsc --noEmit",
     "dev:server": "tsx src/server.ts",
     "dev:server:real": "tsx --env-file-if-exists=.env src/server.real.ts",
-    "convert:zoning": "tsx src/dev/convertZoningShpToGeoJson.ts"
+    "convert:zoning": "tsx src/dev/convertZoningShpToGeoJson.ts",
+    "ingest:school-districts": "tsx src/dev/downloadSchoolDistrictTables.ts",
+    "ingest:address-points": "tsx src/dev/downloadAddressPoints.ts"
   },
   "devDependencies": {
     "@types/adm-zip": "^0.5.8",

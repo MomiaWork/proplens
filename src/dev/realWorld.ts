@@ -21,15 +21,14 @@ import { SchoolDistrictService } from "../school-district/SchoolDistrictService.
  * automated test suite and the offline demo server.
  *
  * School-district wiring (see .scratch/school-district-lookup/) expects
- * `data/address-points.sqlite` to already be populated from the monthly
- * 門牌 CSV, and `data/school-district-elementary.json` /
- * `data/school-district-junior-high.json` to hold the parsed 學區文字表
- * rows (see SchoolDistrictLookup.ts for the shape). None of the three
- * currently has an ingestion script — that's a follow-up to this spec, not
- * yet built. Until then, an empty/missing address-point store means every
- * query's school-district fields come back address-not-in-registry, and a
- * missing school-district JSON file throws (surfaced as a clear 500 by
- * httpServer.ts, not a silent wrong answer).
+ * `data/address-points.sqlite`, `data/school-district-elementary.json`,
+ * and `data/school-district-junior-high.json` to exist — run
+ * `npm run ingest:address-points` and `npm run ingest:school-districts`
+ * first (see src/dev/downloadAddressPoints.ts and
+ * downloadSchoolDistrictTables.ts). Both download real government data
+ * directly (no manual shapefile-extraction step needed, unlike zoning). If
+ * either hasn't been run yet, missing data files throw a clear error,
+ * surfaced as a 500 by httpServer.ts rather than a silent wrong answer.
  */
 export async function buildRealPropertyQueryService(): Promise<PropertyQueryService> {
   const apiKey = process.env.GOOGLE_MAPS_API_KEY;

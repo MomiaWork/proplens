@@ -40,7 +40,7 @@ export class JsonSchoolDistrictLookup implements SchoolDistrictLookup {
       for (const rule of rules) {
         if (rule.village !== village) continue;
 
-        if (rule.wholeNeighborhoods.has(neighborhood)) {
+        if (rule.wholeVillage || rule.wholeNeighborhoods.has(neighborhood)) {
           return { status: "found", schoolName: row.schoolName };
         }
 

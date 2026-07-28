@@ -8,6 +8,8 @@ export interface BoundaryCarveOut {
 
 export interface VillageRule {
   village: string;
+  /** true when the source text says 全里 ("the whole village") rather than listing 鄰 numbers. */
+  wholeVillage: boolean;
   wholeNeighborhoods: Set<string>;
   carveOuts: BoundaryCarveOut[];
 }
@@ -19,9 +21,12 @@ const DIRECTION_BY_CHARACTER: Record<string, BoundaryDirection> = {
   西: "west",
 };
 
-const VILLAGE_BLOCK_PATTERN = /([^\s（）、]+里)(?:（([^）]*)）)?/g;
+// Real source data isn't consistent about paren width: the elementary
+// table uses full-width （）, the junior-high table uses half-width ().
+const VILLAGE_BLOCK_PATTERN = /([^\s（）()、]+里)(?:[（(]([^）)]*)[）)])?/g;
 const CARVE_OUT_CLAUSE_PATTERN = /^第(\d+)鄰(.+?)以([南北東西])$/;
 const NEIGHBORHOOD_LIST_CLAUSE_PATTERN = /^第(.+)鄰$/;
+const WHOLE_VILLAGE_CLAUSE = "全里";
 
 function padNeighborhood(n: number): string {
   return String(n).padStart(3, "0");
@@ -48,12 +53,13 @@ function expandNeighborhoodNumbers(list: string): string[] {
 
 /**
  * Parses a raw 學區範圍_里鄰 cell (e.g. "干城里（第6、12、20鄰及第7鄰福智街以南）")
- * into per-village rules. Per ADR-0010, this only recognizes two clause
- * shapes, joined by "及": a plain neighborhood number/range list, and a
- * single-street 以南/以北/以東/以西 carve-out. Any clause that doesn't match
- * either shape is silently dropped from the rule (not thrown as an error) —
- * SchoolDistrictLookup treats an address that falls into a dropped clause
- * the same as one with no matching rule at all: needs-manual-review.
+ * into per-village rules. Per ADR-0010, this only recognizes three clause
+ * shapes, joined by "及": 全里 (the whole village), a plain neighborhood
+ * number/range list, and a single-street 以南/以北/以東/以西 carve-out. Any
+ * clause that doesn't match one of these shapes is silently dropped from
+ * the rule (not thrown as an error) — SchoolDistrictLookup treats an
+ * address that falls into a dropped clause the same as one with no
+ * matching rule at all: needs-manual-review.
  */
 export function parseSchoolDistrictText(text: string): VillageRule[] {
   const rules: VillageRule[] = [];
@@ -62,12 +68,18 @@ export function parseSchoolDistrictText(text: string): VillageRule[] {
     const village = blockMatch[1] ?? "";
     if (!village) continue;
     const content = blockMatch[2] ?? "";
+    let wholeVillage = false;
     const wholeNeighborhoods = new Set<string>();
     const carveOuts: BoundaryCarveOut[] = [];
 
     for (const rawClause of content.split("及")) {
       const clause = rawClause.trim();
       if (!clause) continue;
+
+      if (clause === WHOLE_VILLAGE_CLAUSE) {
+        wholeVillage = true;
+        continue;
+      }
 
       const carveMatch = clause.match(CARVE_OUT_CLAUSE_PATTERN);
       if (carveMatch) {
@@ -87,7 +99,7 @@ export function parseSchoolDistrictText(text: string): VillageRule[] {
       }
     }
 
-    rules.push({ village, wholeNeighborhoods, carveOuts });
+    rules.push({ village, wholeVillage, wholeNeighborhoods, carveOuts });
   }
 
   return rules;
