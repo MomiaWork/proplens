@@ -96,7 +96,13 @@ export class AddressPointStore {
   }
 }
 
-/** Read-only: transactions.sqlite is pre-built server-side and downloaded as-is. */
+/**
+ * transactions.sqlite's rows (address/date/price) are pre-built
+ * server-side and downloaded as-is — but per ADR-0014, zone_name is no
+ * longer precomputed server-side (that needed Google), so this store is
+ * responsible for filling zone_name in on-device, via
+ * enrichTransactionZones.ts, using the free on-device geocoder.
+ */
 export class TransactionStore {
   constructor(private readonly db: SQLite.SQLiteDatabase) {}
 
@@ -105,6 +111,24 @@ export class TransactionStore {
       "SELECT address, transaction_date, price FROM valid_transactions",
     );
     return rows.map((row) => ({ address: row.address, transactionDate: row.transaction_date, price: row.price }));
+  }
+
+  /** Same-zone transactions by pre-computed zone_name (see enrichTransactionZones.ts / ADR-0012). */
+  findByZone(zoneName: string): ValidTransaction[] {
+    const rows = this.db.getAllSync<{ address: string; transaction_date: string; price: number }>(
+      "SELECT address, transaction_date, price FROM valid_transactions WHERE zone_name = ?",
+      zoneName,
+    );
+    return rows.map((row) => ({ address: row.address, transactionDate: row.transaction_date, price: row.price }));
+  }
+
+  /** Rows not yet enriched with a zone_name. */
+  findUnresolvedZones(): Array<{ id: string; address: string }> {
+    return this.db.getAllSync<{ id: string; address: string }>("SELECT id, address FROM valid_transactions WHERE zone_name IS NULL");
+  }
+
+  setZone(id: string, zoneName: string | null): void {
+    this.db.runSync("UPDATE valid_transactions SET zone_name = ? WHERE id = ?", zoneName, id);
   }
 }
 

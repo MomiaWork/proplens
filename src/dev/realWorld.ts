@@ -6,7 +6,6 @@ import { AddressToZoneService } from "../address-to-zone/AddressToZoneService.ts
 import { TransactionStore } from "../transactions/TransactionStore.ts";
 import { TransactionEtl } from "../transactions/TransactionEtl.ts";
 import { TaichungLvrDownloader } from "../transactions/TaichungLvrDownloader.ts";
-import { enrichTransactionZones } from "../transactions/enrichTransactionZones.ts";
 import { PropertyQueryService } from "../property-query/PropertyQueryService.ts";
 import { AddressPointStore } from "../address-to-village/AddressPointStore.ts";
 import { VillageNeighborhoodCache } from "../address-to-village/VillageNeighborhoodCache.ts";
@@ -50,10 +49,13 @@ export async function buildRealPropertyQueryService(): Promise<PropertyQueryServ
   const transactionStore = new TransactionStore("data/transactions.sqlite");
   const etl = new TransactionEtl(new TaichungLvrDownloader(), transactionStore);
   await etl.run();
-  // Precomputes each transaction's zone (ADR-0012) so PropertyQueryService
-  // can filter same-zone transactions with a plain SQL query instead of
-  // re-resolving every transaction's zone on every property query.
-  await enrichTransactionZones(transactionStore, addressToZone);
+  // zone_name is intentionally left NULL here — per ADR-0014, transaction-zone
+  // enrichment moved to the phone (mobile/lib/enrichTransactionZones.ts), using
+  // the free on-device geocoder, so the published transactions.sqlite snapshot
+  // no longer needs Google at all. This dev server's own same-zone queries will
+  // see 0 results until something enriches this local file; that's expected —
+  // this composition exists for ad hoc computer-side testing, not for producing
+  // the file that ships in the GitHub Release.
 
   const addressPointStore = new AddressPointStore("data/address-points.sqlite");
   const villageCache = new VillageNeighborhoodCache("data/village-neighborhood-cache.sqlite");

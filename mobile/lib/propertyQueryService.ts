@@ -149,7 +149,7 @@ export class PropertyQueryService {
     const { zoneName } = resolution;
 
     const schoolDistricts = await this.schoolDistrictService.resolve(address);
-    const sameZoneTransactions = await this.findSameZoneTransactions(zoneName);
+    const sameZoneTransactions = this.transactionStore.findByZone(zoneName);
 
     if (sameZoneTransactions.length < this.sampleThreshold) {
       return {
@@ -164,16 +164,5 @@ export class PropertyQueryService {
     const averagePrice = sameZoneTransactions.reduce((sum, t) => sum + t.price, 0) / sameZoneTransactions.length;
 
     return { status: "ok", zoneName, averagePrice, sampleCount: sameZoneTransactions.length, ...schoolDistricts };
-  }
-
-  private async findSameZoneTransactions(zoneName: string): Promise<ValidTransaction[]> {
-    const sameZone: ValidTransaction[] = [];
-    for (const transaction of this.transactionStore.all()) {
-      const transactionZone = await this.addressToZone.resolve(transaction.address);
-      if (transactionZone.status === "ok" && transactionZone.zoneName === zoneName) {
-        sameZone.push(transaction);
-      }
-    }
-    return sameZone;
   }
 }

@@ -13,7 +13,7 @@ import {
   View,
 } from 'react-native';
 import { syncDataIfNeeded } from './lib/dataSync';
-import { getPropertyQueryService } from './lib/queryEngine';
+import { getPropertyQueryService, enrichTransactions } from './lib/queryEngine';
 import type { PropertyCard, SchoolDistrictFieldResult } from './lib/queryEngine';
 
 type SyncState = { status: 'syncing'; message: string } | { status: 'ready' } | { status: 'error'; message: string };
@@ -34,6 +34,11 @@ export default function App() {
     try {
       const result = await syncDataIfNeeded((message) => setSync({ status: 'syncing', message }));
       getPropertyQueryService(result.updated);
+      await enrichTransactions((done, total) => {
+        if (total > 0) {
+          setSync({ status: 'syncing', message: `分析交易資料中 (${done}/${total})...` });
+        }
+      });
       setSync({ status: 'ready' });
     } catch (err) {
       setSync({
