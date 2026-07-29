@@ -1,4 +1,4 @@
-import { districtCodeFor, type City } from "./cities";
+import { districtCodeFor, leadingDistrictOf, type City } from "./cities";
 
 export interface ParsedAddress {
   /**
@@ -27,12 +27,10 @@ const TAIL_PATTERN = new RegExp(
  * repeats it (實價登錄's 新竹市 rows do exactly that, since the city has no
  * district to name in that slot), followed by an optional 區.
  *
- * The 區 is stripped whenever one directly follows the city name, whether
- * or not it's a district this city actually has: the 門牌 dataset's street
- * column never includes it, so leaving it attached would break every exact
- * match. Only the *code* depends on the name being a real district.
- * Requiring the city prefix first is what keeps a bare street name that
- * happens to start with 區 from being eaten.
+ * When the city name is present the 區 is stripped whatever it says: the
+ * 門牌 dataset's street column never includes it, so leaving it attached
+ * would break every exact match. Only the *code* depends on the name
+ * being a real district.
  */
 const cityPrefixPatterns = new Map<string, RegExp>();
 
@@ -74,9 +72,21 @@ function toFullWidthDigits(input: string): string {
 export function parseAddress(rawAddress: string, city: City): ParsedAddress | null {
   const normalized = rawAddress.trim().replace(/台/g, "臺");
 
+  let districtName = "";
+  let withoutPrefix = normalized;
+
   const prefix = normalized.match(cityPrefixPattern(city));
-  const districtName = prefix?.groups?.district ?? "";
-  const withoutPrefix = prefix ? normalized.slice(prefix[0].length) : normalized;
+  if (prefix) {
+    districtName = prefix.groups?.district ?? "";
+    withoutPrefix = normalized.slice(prefix[0].length);
+  } else {
+    // No city name, but people routinely write just the 行政區 —
+    // 「烏日區中山路一段592號」. Only a name this city actually has is
+    // stripped, so a street that merely starts with something 區-shaped
+    // (or a fixture address like 住宅區交易1號) keeps it.
+    districtName = leadingDistrictOf(city, normalized);
+    withoutPrefix = normalized.slice(districtName.length);
+  }
 
   const match = withoutPrefix.match(TAIL_PATTERN);
   if (!match?.groups) {

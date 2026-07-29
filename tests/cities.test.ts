@@ -53,11 +53,41 @@ describe("parseAddress 依縣市剝除地址前綴", () => {
     });
   });
 
-  it("台中市：地址完全沒有縣市前綴時不剝除任何東西（交易地址就長這樣）", () => {
+  it("台中市：只寫行政區、沒寫縣市也要剝除——使用者本來就會這樣打", () => {
+    // 中山路 橫跨台中市多個行政區，加區才篩得出來，所以這條路徑必須通。
+    expect(parseAddress("烏日區中山路一段592號", taichung)).toEqual({
+      districtCode: "6602300",
+      street: "中山路一段",
+      lane: "",
+      alley: "",
+      houseNumber: "５９２號",
+    });
+  });
+
+  it("台中市：開頭像區名但不是該市行政區時不剝除（交易地址就長這樣）", () => {
     expect(parseAddress("住宅區交易1號", taichung)).toMatchObject({
       districtCode: "",
       street: "住宅區交易",
       houseNumber: "１號",
+    });
+  });
+
+  it("行政區比對取最長的，北區不會蓋掉北屯區", () => {
+    expect(parseAddress("北屯區軍福十二路58號", taichung)).toMatchObject({
+      districtCode: "6600800",
+      street: "軍福十二路",
+    });
+    expect(parseAddress("北區三民路三段1號", taichung)).toMatchObject({
+      districtCode: "6600500",
+      street: "三民路三段",
+    });
+  });
+
+  it("新竹市：使用者只寫行政區時剝除，但代碼仍留空（無門牌檔可驗證）", () => {
+    expect(parseAddress("東區中華路二段445號", hsinchu)).toMatchObject({
+      districtCode: "",
+      street: "中華路二段",
+      houseNumber: "４４５號",
     });
   });
 

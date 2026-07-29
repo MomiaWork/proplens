@@ -118,16 +118,19 @@ const CITY_LIST: readonly City[] = [
     name: "新竹市",
     displayName: "新竹市",
     /**
-     * Deliberately empty. 新竹市 addresses omit the 區 entirely — both the
-     * everyday form (新竹市光復路一段89號) and 實價登錄's own strings, which
-     * repeat the city instead of naming a district (新竹市新竹市西大路７２
-     * 巷４７弄３號). Since no address ever supplies a district name, a code
-     * table would never be consulted, and guessing at codes we can't check
-     * against the 門牌 file would risk silently filtering every lookup down
-     * to nothing. districtCodeFor() therefore returns "" for every 新竹市
-     * address, which the stores already read as "don't filter on district".
+     * The names are listed but every code is "" on purpose. 新竹市
+     * addresses normally omit the 區 — both the everyday form
+     * (新竹市光復路一段89號) and 實價登錄's own strings, which repeat the
+     * city instead of naming a district (新竹市新竹市西大路７２巷４７弄３號)
+     * — but a user may still type one, and parseAddress has to recognize
+     * it to strip it off the street name.
+     *
+     * The codes stay empty because they can't be checked against a 門牌
+     * file nobody has been able to obtain (ADR-0017); a guessed code would
+     * silently filter every lookup down to nothing, whereas "" means
+     * "don't filter on district", which is correct here.
      */
-    districtCodes: {},
+    districtCodes: { 東區: "", 北區: "", 香山區: "" },
     exampleAddress: "新竹市中華路二段445號",
     lvrEntryName: "o_lvr_land_a.csv",
   },
@@ -157,6 +160,27 @@ export function cityById(id: CityId): City {
  */
 export function districtCodeFor(city: City, districtName: string): string {
   return city.districtCodes[districtName] ?? "";
+}
+
+/**
+ * Whether this is one of the city's real 行政區 — which is a different
+ * question from whether it has a code (新竹市's are all ""), and the one
+ * that decides whether a leading 區 in an address the user typed without
+ * the city name should be stripped off the street.
+ */
+export function isDistrictOf(city: City, districtName: string): boolean {
+  return Object.hasOwn(city.districtCodes, districtName);
+}
+
+/** Longest district name this address starts with, or "" — longest wins so 北區 can't shadow 北屯區. */
+export function leadingDistrictOf(city: City, address: string): string {
+  let longest = "";
+  for (const name of Object.keys(city.districtCodes)) {
+    if (address.startsWith(name) && name.length > longest.length) {
+      longest = name;
+    }
+  }
+  return longest;
 }
 
 /**
