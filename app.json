@@ -17,19 +17,14 @@
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "package": "com.proplens.mobile"
     },
     "web": {
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
-      "expo-sqlite",
-      [
-        "expo-location",
-        {
-          "locationWhenInUsePermission": "PropLens 需要位置權限，才能把地址轉換成座標進行查詢。"
-        }
-      ]
+      "expo-sqlite"
     ]
   }
 }

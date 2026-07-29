@@ -2,6 +2,20 @@
 // own, the same service iOS Shortcuts' "Get Details of Location" action
 // uses) — free, no quota, no API key shipped in the app bundle. See
 // ADR-0014 for why the app no longer calls Google at all.
+//
+// NOTHING WIRES THIS UP TODAY. The shipping card is 實價登錄-only and
+// matches on street name, so it needs no geocoding at all (ADR-0018), and
+// the location permissions were removed from app.json, Info.plist and
+// AndroidManifest.xml accordingly — an app that can't use a permission
+// shouldn't ask for one.
+//
+// Before composing this back in (which the 分區-anchored card needs),
+// restore the expo-location config plugin in app.json:
+//
+//   ["expo-location", { "locationWhenInUsePermission": "…" }]
+//
+// and re-run prebuild. Without it iOS has no usage string and the first
+// geocode call fails at runtime rather than at build time.
 import * as Location from "expo-location";
 import type { Coordinate } from "../core/geo";
 import { type GeocodingClient, GeocodingRateLimitError } from "../core/geocoding";
