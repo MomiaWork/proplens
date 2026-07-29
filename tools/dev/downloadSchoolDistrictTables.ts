@@ -1,57 +1,35 @@
-import { writeFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 import AdmZip from "adm-zip";
 import type { SchoolDistrictRawRow } from "../../src/core/schoolDistrictLookup";
+import type { City, DataFileKey } from "../../src/core/cities";
+import { cityFromArgs, flagValue, outputPathFor } from "../cityArgs";
+import { sourcesFor, type TaichungSchoolDistrictDataset } from "../citySources";
 
 /**
- * Downloads and converts the real 臺中市國民小學/國民中學學區表 datasets
- * into the SchoolDistrictRawRow[] JSON shape src/core/schoolDistrictLookup.ts expects.
+ * Converts a city's 國民小學/國民中學學區表 into the SchoolDistrictRawRow[]
+ * JSON shape src/core/schoolDistrictLookup.ts expects.
  *
- * Both catalog pages advertise a Swagger/API domain (datacenter.taichung.gov.tw)
- * that's dead — same trap as the Phase 1 zoning dataset (see ADR-0008 and
- * .scratch/school-district-lookup/research.md). The catalog UUIDs below are
- * real and stable though (they're the `/search/<uuid>` path on
- * opendata.taichung.gov.tw); found via those catalog pages that this
- * generic endpoint (reverse-engineered from the open-data portal's own
- * Nuxt.js bundle, not documented anywhere) downloads a zip of every
- * resource for a given dataset UUID — no per-file `rid` hunting needed:
+ * 臺中市 publishes both as fetchable CSV resources (see citySources.ts for
+ * the undocumented endpoint that gets at them); 新竹市 publishes PDFs, so
+ * its converted CSVs are passed in by hand. Either way the output is the
+ * same two JSON files.
  *
- *   GET /api/v1/dataset.all.resource.download?pid=<catalog-uuid>
- *
- * Usage: npx tsx tools/dev/downloadSchoolDistrictTables.ts
+ * Usage:
+ *   npm run ingest:school-districts -- --city=taichung
+ *   npm run ingest:school-districts -- --city=hsinchu \
+ *     --from-elementary <國小學區.csv> --from-junior-high <國中學區.csv>
  */
 
-const DATASET_DOWNLOAD_ENDPOINT = "https://opendata.taichung.gov.tw/api/v1/dataset.all.resource.download";
-
-// 臺中市國民小學學區表 — https://opendata.taichung.gov.tw/search/2fd1209f-8df8-41c3-835a-7f0ecbf78e79
-const ELEMENTARY_DATASET_UUID = "2fd1209f-8df8-41c3-835a-7f0ecbf78e79";
-// 臺中市國民中學學區劃分表 — https://opendata.taichung.gov.tw/search/80eb3531-12df-457f-a9d4-f3bad33eb89d
-const JUNIOR_HIGH_DATASET_UUID = "80eb3531-12df-457f-a9d4-f3bad33eb89d";
-
-interface SchoolDistrictSource {
+interface Level {
   label: string;
-  datasetUuid: string;
-  /** Column index of 學校名稱 in the real CSV (0-based). */
-  schoolNameColumn: number;
-  /** Column index of the 里鄰 text cell — named 學區範圍_里鄰 in the elementary CSV, 里鄰 in the junior-high one. */
-  villageNeighborhoodColumn: number;
-  outputPath: string;
+  outputKey: DataFileKey;
+  /** Flag a hand-fetched CSV for this level is passed with. */
+  fromFlag: string;
 }
 
-const SOURCES: SchoolDistrictSource[] = [
-  {
-    label: "國小",
-    datasetUuid: ELEMENTARY_DATASET_UUID,
-    schoolNameColumn: 3,
-    villageNeighborhoodColumn: 5,
-    outputPath: "data/school-district-elementary.json",
-  },
-  {
-    label: "國中",
-    datasetUuid: JUNIOR_HIGH_DATASET_UUID,
-    schoolNameColumn: 3,
-    villageNeighborhoodColumn: 5,
-    outputPath: "data/school-district-junior-high.json",
-  },
+const LEVELS: Level[] = [
+  { label: "國小", outputKey: "schoolDistrictElementary", fromFlag: "from-elementary" },
+  { label: "國中", outputKey: "schoolDistrictJuniorHigh", fromFlag: "from-junior-high" },
 ];
 
 function stripBom(text: string): string {
@@ -62,13 +40,13 @@ function stripBom(text: string): string {
 // ideographic 、 as its separator instead), so this only needs to strip
 // surrounding quotes — the elementary CSV is unquoted, the junior-high one
 // quotes every field defensively. Same naive-split precedent as
-// TaichungLvrDownloader.ts.
+// LvrDownloader.ts.
 function parseCsvLine(line: string): string[] {
   return line.split(",").map((field) => field.trim().replace(/^"|"$/g, ""));
 }
 
-async function downloadDatasetCsv(datasetUuid: string): Promise<string> {
-  const response = await fetch(`${DATASET_DOWNLOAD_ENDPOINT}?pid=${datasetUuid}`);
+async function downloadDatasetCsv(endpoint: string, datasetUuid: string): Promise<string> {
+  const response = await fetch(`${endpoint}?pid=${datasetUuid}`);
   if (!response.ok) {
     throw new Error(`Failed to download dataset ${datasetUuid}: ${response.status} ${response.statusText}`);
   }
@@ -76,32 +54,92 @@ async function downloadDatasetCsv(datasetUuid: string): Promise<string> {
   const zip = new AdmZip(Buffer.from(await response.arrayBuffer()));
   const csvEntry = zip.getEntries().find((entry) => entry.entryName.toLowerCase().endsWith(".csv"));
   if (!csvEntry) {
-    throw new Error(`No CSV file found in dataset ${datasetUuid}'s zip (found: ${zip.getEntries().map((e) => e.entryName).join(", ")})`);
+    throw new Error(
+      `No CSV file found in dataset ${datasetUuid}'s zip (found: ${zip.getEntries().map((e) => e.entryName).join(", ")})`,
+    );
   }
 
   return stripBom(zip.readAsText(csvEntry, "utf-8"));
 }
 
-async function ingestSource(source: SchoolDistrictSource): Promise<void> {
-  const csv = await downloadDatasetCsv(source.datasetUuid);
+interface ColumnLayout {
+  schoolNameColumn: number;
+  villageNeighborhoodColumn: number;
+}
+
+/**
+ * A hand-converted CSV won't have 臺中市's column positions, so its two
+ * columns are located by header name. Guessing wrong here would silently
+ * produce a table of school-district rules keyed on the wrong text, so an
+ * unrecognized header is an error rather than a fallback to position 0.
+ */
+function layoutFromHeader(headerLine: string): ColumnLayout {
+  const headers = parseCsvLine(stripBom(headerLine));
+  const schoolNameColumn = headers.findIndex((h) => h.includes("學校") || h.includes("校名"));
+  const villageNeighborhoodColumn = headers.findIndex((h) => h.includes("里鄰") || h.includes("學區範圍"));
+
+  if (schoolNameColumn < 0 || villageNeighborhoodColumn < 0) {
+    throw new Error(
+      "學區 CSV needs a 學校名稱 column and a 里鄰/學區範圍 column; neither was found in the header row.\n" +
+        `Header row was: ${headers.join(", ")}`,
+    );
+  }
+  return { schoolNameColumn, villageNeighborhoodColumn };
+}
+
+function toRows(csv: string, layout: ColumnLayout): SchoolDistrictRawRow[] {
   const dataLines = csv.split("\n").slice(1).filter((line) => line.trim().length > 0);
 
   const rows: SchoolDistrictRawRow[] = [];
   for (const line of dataLines) {
     const columns = parseCsvLine(line);
-    const schoolName = columns[source.schoolNameColumn];
-    const villageNeighborhoodText = columns[source.villageNeighborhoodColumn];
+    const schoolName = columns[layout.schoolNameColumn];
+    const villageNeighborhoodText = columns[layout.villageNeighborhoodColumn];
     if (!schoolName || !villageNeighborhoodText) continue;
     rows.push({ schoolName, villageNeighborhoodText });
   }
+  return rows;
+}
 
-  writeFileSync(source.outputPath, JSON.stringify(rows));
-  console.log(`${source.label}: wrote ${rows.length} rows to ${source.outputPath}`);
+function fixedLayout(dataset: TaichungSchoolDistrictDataset): ColumnLayout {
+  return {
+    schoolNameColumn: dataset.schoolNameColumn,
+    villageNeighborhoodColumn: dataset.villageNeighborhoodColumn,
+  };
+}
+
+async function ingestLevel(city: City, level: Level): Promise<void> {
+  const source = sourcesFor(city).schoolDistricts;
+  const fromPath = flagValue(level.fromFlag);
+
+  let csv: string;
+  let layout: ColumnLayout;
+
+  if (fromPath) {
+    csv = stripBom(readFileSync(fromPath, "utf8"));
+    layout = layoutFromHeader(csv.split("\n")[0] ?? "");
+  } else if (source.kind === "manual") {
+    throw new Error(`${city.name} ${level.label}: --${level.fromFlag} <csv> is required.\n${source.note}`);
+  } else {
+    const dataset = level.outputKey === "schoolDistrictElementary" ? source.elementary : source.juniorHigh;
+    csv = await downloadDatasetCsv(source.datasetDownloadEndpoint, dataset.datasetUuid);
+    layout = fixedLayout(dataset);
+  }
+
+  const rows = toRows(csv, layout);
+  if (rows.length === 0) {
+    throw new Error(`${city.name} ${level.label}: parsed 0 rows — check the source CSV's columns.`);
+  }
+
+  const outputPath = outputPathFor(city, level.outputKey);
+  writeFileSync(outputPath, JSON.stringify(rows));
+  console.log(`${city.name} ${level.label}: wrote ${rows.length} rows to ${outputPath}`);
 }
 
 async function main() {
-  for (const source of SOURCES) {
-    await ingestSource(source);
+  const city = cityFromArgs();
+  for (const level of LEVELS) {
+    await ingestLevel(city, level);
   }
 }
 

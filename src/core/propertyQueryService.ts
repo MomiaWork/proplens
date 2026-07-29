@@ -7,12 +7,14 @@ import type { GeocodingClient } from "./geocoding";
 import type { GeoJsonZoneLookup } from "./zoneLookup";
 import type { AddressPointStore, TransactionStore, VillageNeighborhoodCache, VillageNeighborhood, ValidTransaction } from "./stores";
 import type { JsonSchoolDistrictLookup } from "./schoolDistrictLookup";
+import type { City } from "./cities";
 import { parseAddress } from "./parseAddress";
 
 export type AddressToZoneResult =
   | { status: "ok"; zoneName: string }
-  | { status: "address-not-recognized" }
-  | { status: "outside-taichung" };
+  /** Not in any 都市計畫分區 of the city being queried (which city that is, is the caller's to say). */
+  | { status: "outside-city" }
+  | { status: "address-not-recognized" };
 
 /**
  * Tries the 門牌 dataset (exact door-plate match) for a coordinate before
@@ -23,13 +25,14 @@ export type AddressToZoneResult =
  */
 export class AddressToZoneService {
   constructor(
+    private readonly city: City,
     private readonly geocodingClient: GeocodingClient,
     private readonly zoneLookup: GeoJsonZoneLookup,
     private readonly addressPointStore: AddressPointStore,
   ) {}
 
   async resolve(address: string): Promise<AddressToZoneResult> {
-    const parsed = parseAddress(address);
+    const parsed = parseAddress(address, this.city);
     const fromAddressPoints = parsed ? this.addressPointStore.findExactCoordinate(parsed) : undefined;
     const coordinate = fromAddressPoints ?? (await this.geocodingClient.geocode(address));
     if (!coordinate) {
@@ -38,7 +41,7 @@ export class AddressToZoneService {
 
     const zoneName = await this.zoneLookup.findZone(coordinate);
     if (!zoneName) {
-      return { status: "outside-taichung" };
+      return { status: "outside-city" };
     }
 
     return { status: "ok", zoneName };
@@ -51,6 +54,7 @@ const DEFAULT_MAX_FALLBACK_DISTANCE_METERS = 200;
 
 export class AddressToVillageService {
   constructor(
+    private readonly city: City,
     private readonly geocodingClient: GeocodingClient,
     private readonly store: AddressPointStore,
     private readonly cache: VillageNeighborhoodCache,
@@ -63,7 +67,7 @@ export class AddressToVillageService {
       return { status: "found", ...cached };
     }
 
-    const parsed = parseAddress(address);
+    const parsed = parseAddress(address, this.city);
     const exact = parsed ? this.store.findExact(parsed) : undefined;
     if (exact) {
       this.cache.set(address, exact);
@@ -129,7 +133,7 @@ export type PropertyCard =
   | ({ status: "insufficient-sample"; zoneName: string; sampleCount: number; transactions: ValidTransaction[] } &
       SchoolDistrictCard)
   | { status: "address-not-recognized" }
-  | { status: "outside-taichung" };
+  | { status: "outside-city" };
 
 const DEFAULT_SAMPLE_THRESHOLD = 5;
 

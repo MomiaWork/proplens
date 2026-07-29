@@ -1,11 +1,12 @@
-import { TaichungLvrDownloader } from "../transactions/TaichungLvrDownloader";
+import { LvrDownloader } from "../transactions/LvrDownloader";
 import { TransactionEtl } from "../transactions/TransactionEtl";
 import { TransactionStore } from "../transactions/TransactionStore";
+import { cityFromArgs, outputPathFor } from "../cityArgs";
 
 /**
- * Downloads the current 實價登錄 batch, keeps only 有效交易紀錄 (reported
- * under 實價登錄2.0, 2021/7 onward — ADR-0001), and writes them to
- * data/transactions.sqlite for publishing to GitHub Releases.
+ * Downloads the current 實價登錄 batch, keeps only one city's 有效交易紀錄
+ * (reported under 實價登錄2.0, 2021/7 onward — ADR-0001), and writes them
+ * to data/<city>-transactions.sqlite for publishing to GitHub Releases.
  *
  * zone_name stays NULL in the published snapshot: per ADR-0014 the phone
  * fills it in itself after downloading, using its free on-device geocoder.
@@ -14,19 +15,18 @@ import { TransactionStore } from "../transactions/TransactionStore";
  * published) — rows are keyed on a hash of address+date+price, so an
  * overlapping download won't duplicate anything.
  *
- * Usage: npx tsx tools/dev/downloadTransactions.ts [outputSqlitePath]
+ * Usage: npm run ingest:transactions -- --city=taichung
  */
-const DEFAULT_OUTPUT_PATH = "data/transactions.sqlite";
-
 async function main() {
-  const outputPath = process.argv[2] ?? DEFAULT_OUTPUT_PATH;
+  const city = cityFromArgs();
+  const outputPath = outputPathFor(city, "transactions");
 
   const store = new TransactionStore(outputPath);
   try {
     const before = store.count();
-    await new TransactionEtl(new TaichungLvrDownloader(), store).run();
+    await new TransactionEtl(city, new LvrDownloader(city), store).run();
     const after = store.count();
-    console.log(`${outputPath}: ${after} 有效交易紀錄 (${after - before} new).`);
+    console.log(`${outputPath}: ${after} ${city.name} 有效交易紀錄 (${after - before} new).`);
   } finally {
     store.close();
   }

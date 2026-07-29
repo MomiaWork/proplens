@@ -5,8 +5,8 @@ export interface AddressPoint {
   /**
    * 鄉鎮市區代碼 straight from the source CSV (e.g. "6600600"). Stored as
    * the raw code rather than a district name because the code is what the
-   * dataset actually carries — see src/core/districts.ts for the code ->
-   * name map and how it was derived.
+   * dataset actually carries — see src/core/cities.ts for each city's
+   * name -> code map and how it was derived.
    */
   districtCode: string;
   street: string;

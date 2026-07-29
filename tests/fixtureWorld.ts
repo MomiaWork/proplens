@@ -12,6 +12,9 @@ import {
   PropertyQueryService,
 } from "../src/core/propertyQueryService";
 import { enrichTransactionZones } from "../src/core/enrichTransactionZones";
+import { cityById, type City, type CityId } from "../src/core/cities";
+import { parseAddress } from "../src/core/parseAddress";
+import { TransactionQueryService } from "../src/core/transactionQueryService";
 import { NodeSqliteDatabase, nodeFileReader } from "./nodeAdapters";
 
 /**
@@ -96,12 +99,28 @@ export const addressBook = new Map<string, Coordinate>([
   // "台中市打字錯誤路999號" is intentionally absent, to simulate a typo'd address
 ]);
 
+interface FixtureTransaction {
+  address: string;
+  transactionDate: string;
+  price: number;
+  transactionSubject?: string;
+  buildingType?: string;
+  mainUse?: string;
+  urbanLandUse?: string;
+  completionDate?: string;
+  buildingAreaSqm?: number;
+  unitPricePerSqm?: number;
+}
+
 /**
  * Already past the 實價登錄2.0 cutoff — the ROC-date parsing and the
  * pre-2021/7 filter belong to the ingestion pipeline, and are covered
  * separately in transactionEtl.test.ts.
+ *
+ * These carry only the fields the 分區-anchored card uses; the detail
+ * fields are exercised by streetTransactions below.
  */
-export const validTransactions = [
+export const validTransactions: FixtureTransaction[] = [
   { address: "住宅區交易1號", transactionDate: "2022-01-01", price: 10_000_000 },
   { address: "住宅區交易2號", transactionDate: "2022-01-02", price: 11_000_000 },
   { address: "住宅區交易3號", transactionDate: "2022-01-03", price: 12_000_000 },
@@ -111,6 +130,77 @@ export const validTransactions = [
   { address: "商業區交易1號", transactionDate: "2022-02-01", price: 20_000_000 },
   { address: "農業區交易1號", transactionDate: "2022-03-01", price: 5_000_000 },
   { address: "農業區交易2號", transactionDate: "2022-03-02", price: 4_800_000 },
+];
+
+/**
+ * 同路段 fixtures (ADR-0018), shaped like real 實價登錄 rows — full-width
+ * digits and all. They cover:
+ *
+ * - 臺灣大道三段: two transactions on one street, one of them a 預售屋-style
+ *   row with no 建築完成年月 and no 都市土地使用分區, so "不詳" has a case.
+ * - 中山路: the same street name in two different 行政區, which is the
+ *   reason findByStreet narrows on 鄉鎮市區代碼 at all.
+ * - 西大路: a 新竹市 row, written the way 實價登錄 writes them — city name
+ *   twice, no 行政區.
+ */
+export const streetTransactions: FixtureTransaction[] = [
+  {
+    address: "臺中市西屯區臺灣大道三段９９號五樓之２",
+    transactionDate: "2024-03-15",
+    price: 15_800_000,
+    transactionSubject: "房地(土地+建物)",
+    buildingType: "住宅大樓(11層含以上有電梯)",
+    mainUse: "住家用",
+    urbanLandUse: "住",
+    completionDate: "2010-06-15",
+    buildingAreaSqm: 132.23, // exactly 40 坪
+    unitPricePerSqm: 119_490,
+  },
+  {
+    address: "臺中市西屯區臺灣大道三段１０１號",
+    transactionDate: "2024-01-20",
+    price: 22_000_000,
+    transactionSubject: "房地(土地+建物)+車位",
+    buildingType: "華廈(10層含以下有電梯)",
+    mainUse: "住家用",
+    // 預售屋: no 建築完成年月, and 非都市土地 leaves 使用分區 blank.
+  },
+  {
+    address: "臺中市西區中山路１號",
+    transactionDate: "2023-11-01",
+    price: 9_000_000,
+    transactionSubject: "房地(土地+建物)",
+    buildingType: "公寓(5樓含以下無電梯)",
+    mainUse: "住家用",
+    urbanLandUse: "商",
+    completionDate: "1988-01-05",
+    buildingAreaSqm: 99.17, // 30 坪
+    unitPricePerSqm: 90_753,
+  },
+  {
+    address: "臺中市東區中山路１號",
+    transactionDate: "2023-10-01",
+    price: 7_000_000,
+    transactionSubject: "房地(土地+建物)",
+    buildingType: "透天厝",
+    mainUse: "住商用",
+    urbanLandUse: "住",
+    completionDate: "1979-12-20",
+    buildingAreaSqm: 99.17,
+    unitPricePerSqm: 70_586,
+  },
+  {
+    address: "新竹市新竹市西大路７２巷４７弄３號二樓",
+    transactionDate: "2026-06-06",
+    price: 11_800_000,
+    transactionSubject: "房地(土地+建物)",
+    buildingType: "公寓(5樓含以下無電梯)",
+    mainUse: "住家用",
+    urbanLandUse: "住",
+    completionDate: "2005-10-30",
+    buildingAreaSqm: 145.95,
+    unitPricePerSqm: 80_850,
+  },
 ];
 
 /** In-memory address -> coordinate dictionary, standing in for the device geocoder. */
@@ -129,7 +219,7 @@ class FixtureGeocodingClient implements GeocodingClient {
  * tools/transactions/TransactionStore.ts — if those change, this fails
  * loudly rather than silently testing a different shape.
  */
-function seedDatabase(db: SqliteDatabase): void {
+function seedDatabase(db: SqliteDatabase, city: City): void {
   db.execSync(`
     CREATE TABLE address_points (
       district_code TEXT NOT NULL,
@@ -164,28 +254,64 @@ function seedDatabase(db: SqliteDatabase): void {
       address TEXT NOT NULL,
       transaction_date TEXT NOT NULL,
       price REAL NOT NULL,
+      district_code TEXT NOT NULL DEFAULT '',
+      street TEXT NOT NULL DEFAULT '',
+      transaction_subject TEXT NOT NULL DEFAULT '',
+      building_type TEXT NOT NULL DEFAULT '',
+      main_use TEXT NOT NULL DEFAULT '',
+      urban_land_use TEXT,
+      completion_date TEXT,
+      building_area_sqm REAL,
+      unit_price_per_sqm REAL,
       zone_name TEXT
     )
   `);
-  for (const [index, t] of validTransactions.entries()) {
+
+  // district_code/street are derived here the same way TransactionEtl
+  // derives them at ingest — via parseAddress against the city being
+  // seeded — so the fixture can't drift into matching on a key the
+  // pipeline would never produce.
+  const rows = [...validTransactions, ...streetTransactions];
+  for (const [index, t] of rows.entries()) {
+    const parsed = parseAddress(t.address, city);
     db.runSync(
-      "INSERT INTO valid_transactions (id, address, transaction_date, price) VALUES (?, ?, ?, ?)",
+      `INSERT INTO valid_transactions
+       (id, address, transaction_date, price, district_code, street, transaction_subject,
+        building_type, main_use, urban_land_use, completion_date, building_area_sqm, unit_price_per_sqm)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       `txn-${index}`,
       t.address,
       t.transactionDate,
       t.price,
+      parsed?.districtCode ?? "",
+      parsed?.street ?? "",
+      t.transactionSubject ?? "",
+      t.buildingType ?? "",
+      t.mainUse ?? "",
+      t.urbanLandUse ?? null,
+      t.completionDate ?? null,
+      t.buildingAreaSqm ?? null,
+      t.unitPricePerSqm ?? null,
     );
   }
 }
 
-export async function buildFixturePropertyQueryService(): Promise<PropertyQueryService> {
+/**
+ * The fixture data is 台中市-shaped (its addresses carry a 縣市+行政區
+ * prefix), so cityId defaults to taichung. It's a parameter so a test can
+ * check what a differently-configured city does with the same world — the
+ * city decides which address prefix is stripped, and stripping the wrong
+ * one is exactly the failure worth catching.
+ */
+export async function buildFixturePropertyQueryService(cityId: CityId = "taichung"): Promise<PropertyQueryService> {
+  const city = cityById(cityId);
   const db = new NodeSqliteDatabase();
-  seedDatabase(db);
+  seedDatabase(db, city);
 
   const geocodingClient = new FixtureGeocodingClient(addressBook);
   const zoneLookup = new GeoJsonZoneLookup(nodeFileReader, zoningDataPath);
   const addressPointStore = new AddressPointStore(db);
-  const addressToZone = new AddressToZoneService(geocodingClient, zoneLookup, addressPointStore);
+  const addressToZone = new AddressToZoneService(city, geocodingClient, zoneLookup, addressPointStore);
 
   const transactionStore = new TransactionStore(db);
   // The snapshot ships with zone_name NULL (ADR-0014); the same on-device
@@ -193,11 +319,23 @@ export async function buildFixturePropertyQueryService(): Promise<PropertyQueryS
   await enrichTransactionZones(transactionStore, addressToZone);
 
   const villageCache = new VillageNeighborhoodCache(db);
-  const addressToVillage = new AddressToVillageService(geocodingClient, addressPointStore, villageCache);
+  const addressToVillage = new AddressToVillageService(city, geocodingClient, addressPointStore, villageCache);
 
   const elementaryLookup = new JsonSchoolDistrictLookup(nodeFileReader, elementaryDistrictDataPath, addressPointStore);
   const juniorHighLookup = new JsonSchoolDistrictLookup(nodeFileReader, juniorHighDistrictDataPath, addressPointStore);
   const schoolDistrictService = new SchoolDistrictService(geocodingClient, addressToVillage, elementaryLookup, juniorHighLookup);
 
   return new PropertyQueryService(addressToZone, transactionStore, schoolDistrictService);
+}
+
+/**
+ * The engine the app currently composes (ADR-0018): 實價登錄 only, no
+ * geocoder, no zoning file, no 門牌 store — which is exactly why it can be
+ * built from nothing but the seeded transactions table.
+ */
+export function buildFixtureTransactionQueryService(cityId: CityId = "taichung"): TransactionQueryService {
+  const city = cityById(cityId);
+  const db = new NodeSqliteDatabase();
+  seedDatabase(db, city);
+  return new TransactionQueryService(city, new TransactionStore(db));
 }

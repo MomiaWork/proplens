@@ -16,3 +16,22 @@ export function rocDateToIso(rocDate: string): string {
 
   return `${westernYear}-${month}-${day}`;
 }
+
+/**
+ * Same conversion for columns that are legitimately blank — 建築完成年月 is
+ * empty on 預售屋 and land-only rows, and some rows carry a literal "0".
+ * Those mean "not disclosed", so they become undefined rather than an
+ * error (unlike 交易年月日, where a bad value is a real data problem) and
+ * the card can say 不詳.
+ */
+export function optionalRocDateToIso(rocDate: string): string | undefined {
+  const trimmed = rocDate.trim();
+  if (!trimmed || Number(trimmed) === 0) {
+    return undefined;
+  }
+  try {
+    return rocDateToIso(trimmed);
+  } catch {
+    return undefined;
+  }
+}

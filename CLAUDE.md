@@ -24,6 +24,10 @@ app and the pipeline from drifting into two implementations of the same logic.
 Business logic belongs in `src/core/` even when only the app uses it today.
 `src/device/` should stay adapters and wiring.
 
+**Anything that differs between 縣市 goes in `src/core/cities.ts`** — the app,
+the test suite and the pipeline all read that one table (ADR-0017). Adding a
+city should not require touching anything else.
+
 Anything under `tools/` and `tests/` is free to use Node APIs; neither is
 reachable from `index.ts`, so Metro never bundles them.
 

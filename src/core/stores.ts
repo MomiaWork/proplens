@@ -17,10 +17,47 @@ export interface VillageNeighborhood {
   houseNumber: string;
 }
 
+/**
+ * One 有效交易紀錄 as the card shows it. Every field is a value 實價登錄
+ * published, or a unit conversion of one (平方公尺 -> 坪) — never a figure
+ * derived by combining rows, which ADR-0005 rules out.
+ *
+ * The optional fields are genuinely absent in the source for some rows
+ * (預售屋 has no 建築完成年月, 非都市土地 has no 都市土地使用分區), and are
+ * left absent rather than defaulted, so the card can say 不詳 instead of
+ * showing a made-up 0.
+ */
 export interface ValidTransaction {
   address: string;
+  /** 交易年月日, ISO. */
   transactionDate: string;
+  /** 總價元 */
   price: number;
+  /** 交易標的 — 房地(土地+建物) / 建物 … */
+  transactionSubject: string;
+  /** 建物型態 — 公寓/華廈/透天厝 … */
+  buildingType: string;
+  /** 主要用途 — 住家用 … */
+  mainUse: string;
+  /** 都市土地使用分區 as 實價登錄 states it (住/商/工), when it does. */
+  urbanLandUse?: string;
+  /** 建築完成年月, ISO — the 年份 the building was finished. */
+  completionDate?: string;
+  /** 建物移轉總面積, 坪. */
+  areaPing?: number;
+  /** 每坪單價, 元. */
+  unitPricePerPing?: number;
+}
+
+/** 1 坪 = 3.305785 m² (地政 standard). */
+export const SQM_PER_PING = 3.305785;
+
+export function sqmToPing(sqm: number): number {
+  return sqm / SQM_PER_PING;
+}
+
+export function pricePerSqmToPricePerPing(pricePerSqm: number): number {
+  return pricePerSqm * SQM_PER_PING;
 }
 
 /**
@@ -146,23 +183,74 @@ export class AddressPointStore {
  * filling zone_name in on-device, via enrichTransactionZones.ts, using the
  * free on-device geocoder.
  */
+interface TransactionRow {
+  address: string;
+  transaction_date: string;
+  price: number;
+  transaction_subject: string;
+  building_type: string;
+  main_use: string;
+  urban_land_use: string | null;
+  completion_date: string | null;
+  building_area_sqm: number | null;
+  unit_price_per_sqm: number | null;
+}
+
+const TRANSACTION_COLUMNS =
+  "address, transaction_date, price, transaction_subject, building_type, main_use, urban_land_use, completion_date, building_area_sqm, unit_price_per_sqm";
+
+/**
+ * The stored file mirrors 實價登錄's own units (平方公尺); the conversion to
+ * 坪 happens here so it exists once, on the read path both the app and the
+ * test suite go through.
+ */
+function toValidTransaction(row: TransactionRow): ValidTransaction {
+  return {
+    address: row.address,
+    transactionDate: row.transaction_date,
+    price: row.price,
+    transactionSubject: row.transaction_subject,
+    buildingType: row.building_type,
+    mainUse: row.main_use,
+    urbanLandUse: row.urban_land_use || undefined,
+    completionDate: row.completion_date || undefined,
+    areaPing: row.building_area_sqm ? sqmToPing(row.building_area_sqm) : undefined,
+    unitPricePerPing: row.unit_price_per_sqm ? pricePerSqmToPricePerPing(row.unit_price_per_sqm) : undefined,
+  };
+}
+
 export class TransactionStore {
   constructor(private readonly db: SqliteDatabase) {}
 
   all(): ValidTransaction[] {
-    const rows = this.db.getAllSync<{ address: string; transaction_date: string; price: number }>(
-      "SELECT address, transaction_date, price FROM valid_transactions",
-    );
-    return rows.map((row) => ({ address: row.address, transactionDate: row.transaction_date, price: row.price }));
+    return this.db.getAllSync<TransactionRow>(`SELECT ${TRANSACTION_COLUMNS} FROM valid_transactions`).map(toValidTransaction);
+  }
+
+  /**
+   * 同路段有效交易 — every transaction on the same named street, newest
+   * first (ADR-0018). districtCode narrows it when the queried address
+   * named a 行政區, since street names repeat across a city's districts;
+   * "" means the address didn't name one, and the whole city's matches for
+   * that street name are returned rather than an arbitrary district's.
+   */
+  findByStreet(districtCode: string, street: string): ValidTransaction[] {
+    return this.db
+      .getAllSync<TransactionRow>(
+        `SELECT ${TRANSACTION_COLUMNS} FROM valid_transactions
+         WHERE street = ? AND (? = '' OR district_code = '' OR district_code = ?)
+         ORDER BY transaction_date DESC`,
+        street,
+        districtCode,
+        districtCode,
+      )
+      .map(toValidTransaction);
   }
 
   /** Same-zone transactions by pre-computed zone_name (see enrichTransactionZones.ts / ADR-0012). */
   findByZone(zoneName: string): ValidTransaction[] {
-    const rows = this.db.getAllSync<{ address: string; transaction_date: string; price: number }>(
-      "SELECT address, transaction_date, price FROM valid_transactions WHERE zone_name = ?",
-      zoneName,
-    );
-    return rows.map((row) => ({ address: row.address, transactionDate: row.transaction_date, price: row.price }));
+    return this.db
+      .getAllSync<TransactionRow>(`SELECT ${TRANSACTION_COLUMNS} FROM valid_transactions WHERE zone_name = ?`, zoneName)
+      .map(toValidTransaction);
   }
 
   /** Rows not yet enriched with a zone_name. */

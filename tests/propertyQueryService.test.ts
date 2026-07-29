@@ -66,10 +66,10 @@ describe("PropertyQueryService", () => {
     expect(card).toEqual({ status: "address-not-recognized" });
   });
 
-  it("超出範圍案例：地址有效但不在台中市任何分區內，回傳與「無法辨識」不同的錯誤，且不含學區欄位", async () => {
+  it("超出範圍案例：地址有效但不在所選縣市任何分區內，回傳與「無法辨識」不同的錯誤，且不含學區欄位", async () => {
     const service = await buildFixturePropertyQueryService();
     const card = await service.query("台北市信義區信義路五段7號");
-    expect(card).toEqual({ status: "outside-taichung" });
+    expect(card).toEqual({ status: "outside-city" });
   });
 
   it("不呈現任何自行計算的比較值、差額或百分比——只有原始事實欄位", async () => {
