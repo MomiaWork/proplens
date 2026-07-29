@@ -34,10 +34,43 @@ that column belongs to the 分區-anchored card, which the app doesn't currently
 compose. The 同路段 match key (`district_code`, `street`) *is* filled in here, by
 the same `parseAddress` the phone uses.
 
+## 發布資料（publishing a data release）
+
+The phone reads `releases/latest` and downloads the assets whose names match
+`dataFileName()`. Four steps:
+
+```sh
+# 1. 產生資料（第一次會抓 ~1.5GB 季別檔並快取到 data/lvr-cache）
+npm run ingest:transactions -- --city=taichung
+npm run ingest:transactions -- --city=hsinchu
+
+# 2. 開一個「新的」tag，notes 隨意
+TAG="data-$(date +%Y-%m-%d)"
+gh release create "$TAG" --repo MomiaWork/proplens --title "$TAG" \
+  --notes "實價登錄 近三年（本期 + 12 季）"
+
+# 3. 上傳兩個縣市的檔案
+gh release upload "$TAG" --repo MomiaWork/proplens \
+  data/taichung-transactions.sqlite data/hsinchu-transactions.sqlite
+
+# 4. 用手機的讀法驗證
+npm run verify:release
+```
+
 **Republishing needs a new release tag, never `--clobber` onto the existing one:**
 `dataSync.ts` decides whether to re-download by comparing `releases/latest`'s
 `tag_name` against the cached one, so overwriting assets under the same tag ships
-data no phone will ever fetch.
+data no phone will ever fetch. For the same reason the new tag has to sort as
+*newer* to GitHub — `gh release create` marks the newest published release as
+`latest`, which is what the app asks for.
+
+Asset names must match `dataFileName()` exactly (`<city>-transactions.sqlite`).
+A mismatch isn't a visible error on the releases page — the app just reports
+「該縣市資料尚未發布」. `npm run verify:release` is what catches both traps.
+
+**資料更新不需要重新 build app.** The app re-checks `releases/latest` on every
+launch, so publishing is enough — the phone picks it up next time it's opened.
+Only code changes need `npx expo run:ios --configuration Release --device <udid>`.
 
 ## Fetched vs. manual sources
 

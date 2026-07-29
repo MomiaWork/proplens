@@ -13,7 +13,8 @@
     "convert:zoning": "tsx tools/dev/convertZoningShpToGeoJson.ts",
     "ingest:school-districts": "tsx tools/dev/downloadSchoolDistrictTables.ts",
     "ingest:address-points": "tsx tools/dev/downloadAddressPoints.ts",
-    "ingest:transactions": "tsx tools/dev/downloadTransactions.ts"
+    "ingest:transactions": "tsx tools/dev/downloadTransactions.ts",
+    "verify:release": "tsx tools/dev/verifyRelease.ts"
   },
   "dependencies": {
     "@turf/boolean-point-in-polygon": "^7.3.5",

@@ -14,6 +14,7 @@ import {
   View,
 } from 'react-native';
 import { CITIES, cityById, type City, type CityId } from './src/core/cities';
+import { formatWan } from './src/core/formatMoney';
 import { syncCityDataIfNeeded, CityDataNotPublishedError } from './src/device/dataSync';
 import { readSelectedCityId, writeSelectedCityId } from './src/device/selectedCity';
 import { getTransactionQueryService } from './src/device/queryEngine';
@@ -259,7 +260,7 @@ function formatPing(areaPing: number | undefined): string | undefined {
 }
 
 function formatMoney(amount: number | undefined): string | undefined {
-  return amount === undefined ? undefined : `${Math.round(amount).toLocaleString('zh-TW')} 元`;
+  return amount === undefined ? undefined : formatWan(amount);
 }
 
 const styles = StyleSheet.create({
