@@ -3,11 +3,11 @@ import { StatusBar } from 'expo-status-bar';
 import {
   ActivityIndicator,
   Button,
+  FlatList,
   KeyboardAvoidingView,
   Platform,
   Pressable,
   SafeAreaView,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -99,41 +99,70 @@ export default function App() {
   }
 
   const city = cityId ? cityById(cityId) : null;
+  // A busy street runs to hundreds of transactions (臺灣大道三段 alone has
+  // 547), so the results are the FlatList itself and the form is its
+  // header — rendering them all eagerly inside a ScrollView would mount
+  // thousands of views on every query.
+  const transactions = card?.status === 'ok' ? card.transactions : EMPTY_TRANSACTIONS;
+
+  const header = (
+    <View style={styles.header}>
+      <Text style={styles.title}>PropLens 物件查詢（POC）</Text>
+
+      <Text style={styles.fieldLabel}>縣市</Text>
+      <CityPicker selectedCityId={cityId} onSelect={handleSelectCity} />
+
+      {sync.status !== 'ready' && <SyncStatusView sync={sync} onRetry={() => city && startSync(city)} />}
+
+      <TextInput
+        style={styles.input}
+        value={address}
+        onChangeText={setAddress}
+        placeholder={city ? `輸入${city.displayName}地址，例如 ${city.exampleAddress}` : '輸入地址'}
+        autoCapitalize="none"
+        autoCorrect={false}
+        editable={sync.status === 'ready'}
+      />
+      <Button
+        title={loading ? '查詢中…' : '查詢'}
+        onPress={handleQuery}
+        disabled={loading || sync.status !== 'ready' || address.trim().length === 0}
+      />
+
+      {error && <Text style={styles.error}>{error}</Text>}
+      {card && <ResultSummary card={card} />}
+      <StatusBar style="auto" />
+    </View>
+  );
 
   return (
     <SafeAreaView style={styles.safeArea}>
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.flex}>
-        <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
-          <Text style={styles.title}>PropLens 物件查詢（POC）</Text>
-
-          <Text style={styles.fieldLabel}>縣市</Text>
-          <CityPicker selectedCityId={cityId} onSelect={handleSelectCity} />
-
-          {sync.status !== 'ready' && <SyncStatusView sync={sync} onRetry={() => city && startSync(city)} />}
-
-          <TextInput
-            style={styles.input}
-            value={address}
-            onChangeText={setAddress}
-            placeholder={city ? `輸入${city.displayName}地址，例如 ${city.exampleAddress}` : '輸入地址'}
-            autoCapitalize="none"
-            autoCorrect={false}
-            editable={sync.status === 'ready'}
-          />
-          <Button
-            title={loading ? '查詢中…' : '查詢'}
-            onPress={handleQuery}
-            disabled={loading || sync.status !== 'ready' || address.trim().length === 0}
-          />
-
-          {error && <Text style={styles.error}>{error}</Text>}
-          {card && <TransactionCardView card={card} />}
-
-          <StatusBar style="auto" />
-        </ScrollView>
+        <FlatList
+          data={transactions}
+          keyExtractor={transactionKey}
+          renderItem={({ item }) => <TransactionRow transaction={item} />}
+          ListHeaderComponent={header}
+          contentContainerStyle={styles.container}
+          keyboardShouldPersistTaps="handled"
+          initialNumToRender={8}
+          windowSize={5}
+        />
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
+}
+
+/** Stable identity so the list isn't rebuilt when nothing was found. */
+const EMPTY_TRANSACTIONS: ValidTransaction[] = [];
+
+/**
+ * The same natural key the pipeline dedupes on, so two genuinely distinct
+ * rows can't collide — 同一棟同日期同價格 of two different units would,
+ * but the store already merges those into one row.
+ */
+function transactionKey(transaction: ValidTransaction): string {
+  return `${transaction.address}|${transaction.transactionDate}|${transaction.price}`;
 }
 
 function CityPicker({
@@ -194,7 +223,8 @@ function SyncStatusView({ sync, onRetry }: { sync: Exclude<SyncState, { status: 
   );
 }
 
-function TransactionCardView({ card }: { card: TransactionCard }) {
+/** Everything above the transaction list — the list itself is the FlatList's data. */
+function ResultSummary({ card }: { card: TransactionCard }) {
   if (card.status === 'address-not-recognized') {
     return <Text style={styles.error}>地址無法辨識，請確認有輸入到門牌號（例如「…路123號」）。</Text>;
   }
@@ -207,12 +237,7 @@ function TransactionCardView({ card }: { card: TransactionCard }) {
       <Text style={styles.resultsHeading}>
         {card.street}同路段有效交易　{card.count} 筆
       </Text>
-      <Text style={styles.resultsNote}>
-        以下皆為實價登錄公告的原始欄位，未經任何比較或估算。
-      </Text>
-      {card.transactions.map((transaction, index) => (
-        <TransactionRow key={index} transaction={transaction} />
-      ))}
+      <Text style={styles.resultsNote}>以下皆為實價登錄公告的原始欄位，未經任何比較或估算。</Text>
     </View>
   );
 }
@@ -266,7 +291,8 @@ function formatMoney(amount: number | undefined): string | undefined {
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: '#fff' },
   flex: { flex: 1 },
-  container: { padding: 20, gap: 12 },
+  container: { padding: 20, gap: 12, paddingBottom: 40 },
+  header: { gap: 12 },
   title: { fontSize: 20, fontWeight: '600', marginBottom: 8 },
   fieldLabel: { fontSize: 12, color: '#666' },
   cityPicker: {
